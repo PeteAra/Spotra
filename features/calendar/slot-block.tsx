@@ -8,6 +8,7 @@ import { SlotClaimToast } from "@/features/reservations/slot-claim-toast";
 import { SlotCancelToast } from "@/features/reservations/slot-cancel-toast";
 import { deleteSlot } from "@/features/slots/actions";
 import { formatTimeRange } from "@/lib/utils/dates";
+import { slotColorFromTitle } from "@/lib/utils/slot-color";
 import { cn } from "@/lib/utils/cn";
 import type { Reservation, SlotWithReservations, WorkspaceRole } from "@/types";
 
@@ -34,16 +35,20 @@ export function SlotBlock({
     (r) => r.account_id === accountId,
   );
   const canClaim = !ownReservation && slot.availability !== "full";
-
-  const color =
-    slot.availability === "full"
-      ? "border-[var(--danger)]/40 bg-[color-mix(in_srgb,var(--danger)_10%,var(--surface))]"
-      : slot.availability === "partial"
-        ? "border-[var(--accent)]/40 bg-[var(--accent-soft)]"
-        : "border-[var(--success)]/40 bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))]";
+  const palette = slotColorFromTitle(slot.title);
+  const title = slot.title?.trim();
 
   return (
-    <div className={cn("rounded-2xl border p-4", color)}>
+    <div
+      className={cn(
+        "rounded-2xl border p-4",
+        slot.availability === "full" && "opacity-80",
+      )}
+      style={{
+        backgroundColor: palette.bg,
+        borderColor: palette.border,
+      }}
+    >
       <div className="flex items-start justify-between gap-3">
         <button
           type="button"
@@ -59,7 +64,15 @@ export function SlotBlock({
             }
           }}
         >
-          <p className="font-semibold">
+          {title ? (
+            <p className="font-semibold" style={{ color: palette.text }}>
+              {title}
+            </p>
+          ) : null}
+          <p
+            className={cn("font-semibold", title && "mt-0.5 text-sm font-medium")}
+            style={{ color: title ? palette.text : undefined }}
+          >
             {formatTimeRange(slot.starts_at, slot.ends_at)}
           </p>
           <p className="mt-1 text-sm text-[var(--muted)]">
@@ -107,7 +120,7 @@ export function SlotBlock({
                 "rounded-full px-3 py-1 text-xs font-medium",
                 isOwn
                   ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
-                  : "bg-[var(--surface-muted)] text-[var(--foreground)]",
+                  : "bg-[var(--surface)]/80 text-[var(--foreground)]",
               )}
               onClick={() => {
                 if (!isOwn && role !== "admin") return;

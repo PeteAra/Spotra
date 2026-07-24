@@ -32,6 +32,7 @@ export type WorkspaceMember = {
 export type Slot = {
   id: string;
   workspace_id: string;
+  title: string;
   starts_at: string;
   ends_at: string;
   capacity: number;

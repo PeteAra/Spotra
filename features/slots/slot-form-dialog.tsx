@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createSlot, updateSlot } from "@/features/slots/actions";
+import { slotColorFromTitle } from "@/lib/utils/slot-color";
 import { slotFormSchema, type SlotFormInput } from "@/lib/validators";
 import type { SlotWithReservations } from "@/types";
 
@@ -37,6 +38,7 @@ export function SlotFormDialog({
   const form = useForm<SlotFormInput>({
     resolver: zodResolver(slotFormSchema),
     defaultValues: {
+      title: "",
       date: format(day, "yyyy-MM-dd"),
       startTime: "09:00",
       endTime: "09:30",
@@ -44,12 +46,16 @@ export function SlotFormDialog({
     },
   });
 
+  const watchedTitle = form.watch("title");
+  const previewColor = slotColorFromTitle(watchedTitle);
+
   useEffect(() => {
     if (!open) return;
     if (slot) {
       const start = new Date(slot.starts_at);
       const end = new Date(slot.ends_at);
       form.reset({
+        title: slot.title ?? "",
         date: format(start, "yyyy-MM-dd"),
         startTime: format(start, "HH:mm"),
         endTime: format(end, "HH:mm"),
@@ -57,6 +63,7 @@ export function SlotFormDialog({
       });
     } else {
       form.reset({
+        title: "",
         date: format(day, "yyyy-MM-dd"),
         startTime: "09:00",
         endTime: "09:30",
@@ -91,6 +98,27 @@ export function SlotFormDialog({
             await onSaved();
           })}
         >
+          <div className="space-y-2">
+            <Label htmlFor="title">Title</Label>
+            <Input
+              id="title"
+              placeholder="e.g. Lab practice, Office hours"
+              maxLength={80}
+              {...form.register("title")}
+            />
+            <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
+              <span
+                className="inline-block h-3 w-3 rounded-full border"
+                style={{
+                  backgroundColor: previewColor.bg,
+                  borderColor: previewColor.border,
+                }}
+                aria-hidden
+              />
+              Color is assigned from the title — same name always gets the same
+              color.
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="startTime">Start</Label>

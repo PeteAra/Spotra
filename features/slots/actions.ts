@@ -153,6 +153,7 @@ export async function getSlotsForMonth(input: {
 
 export async function createSlot(input: {
   workspaceId: string;
+  title?: string;
   date: string;
   startTime: string;
   endTime: string;
@@ -173,6 +174,7 @@ export async function createSlot(input: {
     .from("slots")
     .insert({
       workspace_id: input.workspaceId,
+      title: parsed.data.title,
       starts_at: startsAt.toISOString(),
       ends_at: endsAt.toISOString(),
       capacity: parsed.data.capacity,
@@ -188,6 +190,7 @@ export async function createSlot(input: {
 export async function updateSlot(input: {
   slotId: string;
   workspaceId: string;
+  title?: string;
   date: string;
   startTime: string;
   endTime: string;
@@ -220,6 +223,7 @@ export async function updateSlot(input: {
   const { data, error } = await admin.supabase
     .from("slots")
     .update({
+      title: parsed.data.title,
       starts_at: startsAt.toISOString(),
       ends_at: endsAt.toISOString(),
       capacity: parsed.data.capacity,
@@ -284,6 +288,7 @@ async function copySlotsToDates(
 
       return {
         workspace_id: slot.workspace_id,
+        title: slot.title ?? "",
         starts_at: startsAt.toISOString(),
         ends_at: endsAt.toISOString(),
         capacity: slot.capacity,
@@ -414,6 +419,7 @@ export async function duplicatePreviousMonth(input: {
 
     const rows: Array<{
       workspace_id: string;
+      title: string;
       starts_at: string;
       ends_at: string;
       capacity: number;
@@ -448,6 +454,7 @@ export async function duplicatePreviousMonth(input: {
 
       rows.push({
         workspace_id: input.workspaceId,
+        title: slot.title ?? "",
         starts_at: startsAt.toISOString(),
         ends_at: endsAt.toISOString(),
         capacity: slot.capacity,

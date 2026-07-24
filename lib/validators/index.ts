@@ -6,6 +6,7 @@ export const workspaceTitleSchema = z.object({
 
 export const slotFormSchema = z
   .object({
+    title: z.string().trim().max(80, "Title must be 80 characters or fewer"),
     date: z.string().min(1),
     startTime: z
       .string()

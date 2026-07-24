@@ -45,6 +45,7 @@ create index workspace_members_workspace_role_idx on public.workspace_members (w
 create table public.slots (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  title text not null default '',
   starts_at timestamptz not null,
   ends_at timestamptz not null,
   capacity integer not null default 1,
@@ -52,7 +53,8 @@ create table public.slots (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint slots_time_order check (ends_at > starts_at),
-  constraint slots_capacity_range check (capacity between 1 and 100)
+  constraint slots_capacity_range check (capacity between 1 and 100),
+  constraint slots_title_length check (char_length(title) <= 80)
 );
 
 create index slots_workspace_starts_idx on public.slots (workspace_id, starts_at);
