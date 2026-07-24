@@ -3,6 +3,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -29,6 +30,7 @@ export function CreateWorkspaceModal({
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const form = useForm<WorkspaceTitleInput>({
     resolver: zodResolver(workspaceTitleSchema),
     defaultValues: { title: "" },
@@ -52,8 +54,10 @@ export function CreateWorkspaceModal({
               toast.error(result.error);
               return;
             }
+            await queryClient.invalidateQueries({ queryKey: ["my-workspaces"] });
             toast.success("Click any day to create available time slots.");
             onOpenChange(false);
+            form.reset({ title: "" });
             router.push(`/workspace/${result.data.slug}`);
           })}
         >

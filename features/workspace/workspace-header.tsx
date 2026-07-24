@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, Copy, LayoutGrid, Link2, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +27,7 @@ export function WorkspaceHeader({
   role: WorkspaceRole;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [shareOpen, setShareOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -116,13 +118,17 @@ export function WorkspaceHeader({
               onClick={async () => {
                 setDeleting(true);
                 const result = await deleteWorkspace(workspace.id);
-                setDeleting(false);
                 if (!result.ok) {
+                  setDeleting(false);
                   toast.error(result.error);
                   return;
                 }
+                await queryClient.invalidateQueries({
+                  queryKey: ["my-workspaces"],
+                });
                 toast.success("Workspace deleted");
                 router.push("/workspaces");
+                router.refresh();
               }}
             >
               {deleting ? "Deleting…" : "Delete workspace"}

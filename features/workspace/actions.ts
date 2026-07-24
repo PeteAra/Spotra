@@ -1,11 +1,13 @@
 "use server";
 
+import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { workspaceTitleSchema } from "@/lib/validators";
 import { slugify, withSlugSuffix } from "@/lib/utils/slugify";
 import type { ActionResult, Workspace, WorkspaceGate } from "@/types";
 
 async function ensureAccount() {
+  noStore();
   const supabase = await createClient();
   const {
     data: { user },
@@ -187,6 +189,7 @@ export async function listMyWorkspaces(): Promise<
     }>
   >
 > {
+  noStore();
   const { supabase, user, accountId } = await ensureAccount();
   if (!user || !accountId) {
     return { ok: false, error: "UNAUTHENTICATED" };

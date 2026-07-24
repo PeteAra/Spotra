@@ -33,17 +33,21 @@ export function WorkspacesPageClient() {
     title: string;
   } | null>(null);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, isFetching } = useQuery({
     queryKey: ["my-workspaces"],
     queryFn: async () => {
       const result = await listMyWorkspaces();
       if (!result.ok) throw new Error(result.error);
       return result.data;
     },
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: ["my-workspaces"] });
+    await queryClient.refetchQueries({ queryKey: ["my-workspaces"] });
   }
 
   return (
@@ -58,6 +62,7 @@ export function WorkspacesPageClient() {
           </h1>
           <p className="mt-2 text-[var(--muted)]">
             Pick a calendar to open, or create a new one.
+            {isFetching && !isLoading ? " Updating…" : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
