@@ -216,11 +216,11 @@ export function CalendarMonthView({
           })}
         </div>
         {isLoading && (
-          <p className="mt-4 text-sm text-[var(--muted)]">Loading slots…</p>
+          <p className="mt-4 text-sm text-[var(--muted)]">Loading spots…</p>
         )}
         {slotsError && (
           <p className="mt-4 text-sm text-[var(--danger)]">
-            Could not load slots:{" "}
+            Could not load spots:{" "}
             {slotsError instanceof Error ? slotsError.message : "Unknown error"}
           </p>
         )}
@@ -276,7 +276,7 @@ export function CalendarMonthView({
             toast.error(result.error);
           } else {
             toast.success(
-              `Created ${result.data.created} slots` +
+              `Created ${result.data.created} spots` +
                 (result.data.skippedDays
                   ? ` (${result.data.skippedDays} days skipped)`
                   : ""),
@@ -301,9 +301,9 @@ export function CalendarMonthView({
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Clear slots for {format(month, "MMMM yyyy")}?</DialogTitle>
+            <DialogTitle>Clear spots for {format(month, "MMMM yyyy")}?</DialogTitle>
             <DialogDescription>
-              Slots with reservation history will be kept. Empty slots will be
+              Spots with claim history will be kept. Empty spots will be
               deleted.
             </DialogDescription>
           </DialogHeader>

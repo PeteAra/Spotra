@@ -29,7 +29,7 @@ export function DayDetailPanel({
   if (!day) {
     return (
       <aside className="rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-6 text-[var(--muted)]">
-        Select a day to view or create slots.
+        Select a day to view or create spots.
       </aside>
     );
   }
@@ -47,7 +47,7 @@ export function DayDetailPanel({
           <div className="flex flex-col items-end gap-2">
             <Button size="sm" onClick={onAddSlot}>
               <Plus className="h-4 w-4" />
-              Add slot
+              Add spot
             </Button>
             {slots.length > 0 && (
               <DuplicateDayMenu
@@ -65,8 +65,8 @@ export function DayDetailPanel({
         {slots.length === 0 ? (
           <p className="rounded-2xl bg-[var(--surface-muted)] px-4 py-8 text-center text-sm text-[var(--muted)]">
             {role === "admin"
-              ? "No slots yet. Click Add slot to open availability."
-              : "No slots available on this day."}
+              ? "No spots yet. Click Add spot to open availability."
+              : "No spots available on this day."}
           </p>
         ) : (
           slots.map((slot) => (

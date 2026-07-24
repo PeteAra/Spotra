@@ -29,8 +29,8 @@ export function DuplicatePreviousMonthPrompt({
         <DialogHeader>
           <DialogTitle>Duplicate previous month?</DialogTitle>
           <DialogDescription>
-            Copy last month&apos;s slot pattern into {targetLabel}. Days that
-            already have slots will be skipped.
+            Copy last month&apos;s spot pattern into {targetLabel}. Days that
+            already have spots will be skipped.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

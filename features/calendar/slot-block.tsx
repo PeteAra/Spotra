@@ -98,7 +98,7 @@ export function SlotBlock({
                   toast.error(result.error);
                   return;
                 }
-                toast.success("Slot deleted");
+                toast.success("Spot deleted");
                 onChanged();
               }}
             >
@@ -127,7 +127,7 @@ export function SlotBlock({
                 setActiveReservation(reservation);
                 setCancelOpen(true);
               }}
-              title={isOwn || role === "admin" ? "Cancel reservation" : name}
+              title={isOwn || role === "admin" ? "Cancel this spot" : name}
             >
               {name}
               {isOwn ? " (you)" : ""}
@@ -149,7 +149,7 @@ export function SlotBlock({
               variant="secondary"
               onClick={() => setClaimOpen(true)}
             >
-              Claim this slot
+              Claim this spot
             </Button>
           </SlotClaimToast>
         </div>

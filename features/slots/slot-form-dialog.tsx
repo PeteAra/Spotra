@@ -76,7 +76,7 @@ export function SlotFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{slot ? "Edit slot" : "Create slot"}</DialogTitle>
+          <DialogTitle>{slot ? "Edit spot" : "Create spot"}</DialogTitle>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -93,7 +93,7 @@ export function SlotFormDialog({
               toast.error(result.error);
               return;
             }
-            toast.success(slot ? "Slot updated" : "Slot created");
+            toast.success(slot ? "Spot updated" : "Spot created");
             onOpenChange(false);
             await onSaved();
           })}
@@ -145,13 +145,13 @@ export function SlotFormDialog({
             />
             <p className="text-xs text-[var(--muted)]">
               Default is 1. Set to 8 (or more) when multiple people can share this
-              slot.
+              spot.
             </p>
           </div>
           <input type="hidden" {...form.register("date")} />
           <DialogFooter>
             <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? "Saving…" : "Save slot"}
+              {form.formState.isSubmitting ? "Saving…" : "Save spot"}
             </Button>
           </DialogFooter>
         </form>

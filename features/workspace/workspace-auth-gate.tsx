@@ -44,7 +44,7 @@ export function WorkspaceAuthGate({
             {gate?.title ?? "Spotra workspace"}
           </h2>
           <p className="mt-3 text-[var(--muted)]">
-            Sign in with Google to view availability and claim a slot.
+            Sign in with Google to view availability and claim a spot.
           </p>
           <div className="mt-6 flex justify-center">
             <SignInWithGoogleButton

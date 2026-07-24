@@ -33,7 +33,7 @@ export function DuplicateDayMenu({
             return;
           }
           toast.success(
-            `Duplicated to all ${weekdayLabel}s (${result.data.created} slots)`,
+            `Duplicated to all ${weekdayLabel}s (${result.data.created} spots)`,
           );
           onDone();
         }}
@@ -53,7 +53,7 @@ export function DuplicateDayMenu({
             return;
           }
           toast.success(
-            `Duplicated to weekdays (${result.data.created} slots)`,
+            `Duplicated to weekdays (${result.data.created} spots)`,
           );
           onDone();
         }}

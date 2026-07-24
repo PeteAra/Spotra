@@ -40,7 +40,7 @@ export function WorkspaceHeader({
   async function handleShare() {
     const shareData: ShareData = {
       title: `${workspace.title} — Spotra`,
-      text: `Join ${workspace.title} on Spotra to claim available slots.`,
+      text: `Join ${workspace.title} on Spotra to claim available spots.`,
       url: shareUrl,
     };
 
@@ -107,7 +107,7 @@ export function WorkspaceHeader({
             <DialogTitle>Share this workspace</DialogTitle>
             <DialogDescription>
               Anyone with this link can sign in with Google and claim available
-              slots.
+              spots.
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-2">
@@ -132,8 +132,8 @@ export function WorkspaceHeader({
           <DialogHeader>
             <DialogTitle>Delete this workspace?</DialogTitle>
             <DialogDescription>
-              This permanently deletes {workspace.title}, including slots and
-              reservation history.
+              This permanently deletes {workspace.title}, including spots and
+              claim history.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

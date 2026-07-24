@@ -45,7 +45,7 @@ export function SlotCancelToast({
           <DialogTitle>Are you sure you want to cancel?</DialogTitle>
           <DialogDescription>
             Please give a reason for the cancellation. Your name will be removed
-            from the slot.
+            from the spot.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
@@ -78,7 +78,7 @@ export function SlotCancelToast({
                 toast.error(result.error);
                 return;
               }
-              toast.success("Reservation cancelled");
+              toast.success("Spot cancelled");
               setReason("");
               onOpenChange(false);
               onCancelled();

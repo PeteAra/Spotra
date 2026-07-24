@@ -29,9 +29,9 @@ export function SlotClaimToast({
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent side="top" className="w-72">
-        <p className="font-medium">Claim this slot?</p>
+        <p className="font-medium">Claim this spot?</p>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Your name will appear on the slot for others in this workspace.
+          Your name will appear on the spot for others in this workspace.
         </p>
         <div className="mt-4 flex justify-end gap-2">
           <Button
@@ -52,7 +52,7 @@ export function SlotClaimToast({
                 toast.error(result.error);
                 return;
               }
-              toast.success("Slot claimed");
+              toast.success("Spot claimed");
               onOpenChange(false);
               onClaimed();
             }}

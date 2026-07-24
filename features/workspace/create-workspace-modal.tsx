@@ -55,7 +55,7 @@ export function CreateWorkspaceModal({
               return;
             }
             await queryClient.invalidateQueries({ queryKey: ["my-workspaces"] });
-            toast.success("Click any day to create available time slots.");
+            toast.success("Click any day to create available spots.");
             onOpenChange(false);
             form.reset({ title: "" });
             router.push(`/workspace/${result.data.slug}`);

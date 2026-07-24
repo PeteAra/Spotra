@@ -19,26 +19,26 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://spotra.dev";
 
 export const metadata: Metadata = {
   title: {
-    default: "Spotra — Claim time, simply",
+    default: "Spotra — Claim a spot, simply",
     template: "%s — Spotra",
   },
   description:
-    "Create a calendar, open available slots, share the link, let people claim seats.",
+    "Create a calendar, open available spots, share the link, let people claim a spot.",
   metadataBase: new URL(siteUrl),
   openGraph: {
     type: "website",
     locale: "en_US",
     url: siteUrl,
     siteName: "Spotra",
-    title: "Spotra — Claim time, simply",
+    title: "Spotra — Claim a spot, simply",
     description:
-      "Create a calendar, open available slots, share the link, let people claim seats.",
+      "Create a calendar, open available spots, share the link, let people claim a spot.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Spotra — Claim time, simply",
+    title: "Spotra — Claim a spot, simply",
     description:
-      "Create a calendar, open available slots, share the link, let people claim seats.",
+      "Create a calendar, open available spots, share the link, let people claim a spot.",
   },
 };
 

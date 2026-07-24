@@ -19,7 +19,7 @@ export async function generateMetadata({
   }
 
   const { title } = gateResult.data;
-  const description = `Join ${title} on Spotra to claim available time slots.`;
+  const description = `Join ${title} on Spotra to claim available spots.`;
   const url = `/workspace/${slug}`;
 
   return {

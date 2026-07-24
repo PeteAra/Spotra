@@ -47,7 +47,7 @@ async function requireAdmin(workspaceId: string) {
   if (!membership || membership.role !== "admin") {
     return {
       ok: false as const,
-      error: "Only workspace admins can manage slots.",
+      error: "Only workspace admins can manage spots.",
       supabase,
       user,
     };
@@ -161,7 +161,7 @@ export async function createSlot(input: {
 }): Promise<ActionResult<Slot>> {
   const parsed = slotFormSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid slot" };
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid spot" };
   }
 
   const admin = await requireAdmin(input.workspaceId);
@@ -198,7 +198,7 @@ export async function updateSlot(input: {
 }): Promise<ActionResult<Slot>> {
   const parsed = slotFormSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid slot" };
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid spot" };
   }
 
   const admin = await requireAdmin(input.workspaceId);
@@ -252,7 +252,7 @@ export async function deleteSlot(input: {
   if ((count ?? 0) > 0) {
     return {
       ok: false,
-      error: "This slot has reservation history and cannot be deleted. Cancel claims first.",
+      error: "This spot has claim history and cannot be deleted. Cancel claims first.",
     };
   }
 
@@ -335,7 +335,7 @@ export async function duplicateSameWeekdayInMonth(input: {
     const source = new Date(`${input.sourceDate}T12:00:00`);
     const slots = await getSlotsForDay(admin.supabase, input.workspaceId, source);
     if (slots.length === 0) {
-      return { ok: false, error: "No slots on this day to duplicate." };
+      return { ok: false, error: "No spots on this day to duplicate." };
     }
 
     const targets = sameWeekdayDatesInMonth(source, source);
@@ -362,7 +362,7 @@ export async function duplicateWeekdaysInMonth(input: {
     const source = new Date(`${input.sourceDate}T12:00:00`);
     const slots = await getSlotsForDay(admin.supabase, input.workspaceId, source);
     if (slots.length === 0) {
-      return { ok: false, error: "No slots on this day to duplicate." };
+      return { ok: false, error: "No spots on this day to duplicate." };
     }
 
     const targets = weekdayDatesInMonth(source, source);
@@ -401,7 +401,7 @@ export async function duplicatePreviousMonth(input: {
 
     if (error) return { ok: false, error: error.message };
     if (!sourceSlots?.length) {
-      return { ok: false, error: "Previous month has no slots to copy." };
+      return { ok: false, error: "Previous month has no spots to copy." };
     }
 
     const targetStart = startOfMonth(targetMonth).toISOString();

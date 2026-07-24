@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "Spotra — Claim time, simply";
+export const alt = "Spotra — Claim a spot, simply";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -61,7 +61,7 @@ export default function OpenGraphImage() {
               maxWidth: 900,
             }}
           >
-            Claim time, simply
+            Claim a spot, simply
           </div>
           <div
             style={{
@@ -71,8 +71,8 @@ export default function OpenGraphImage() {
               lineHeight: 1.35,
             }}
           >
-            Create a calendar, open available slots, share the link, let people
-            claim seats.
+            Create a calendar, open available spots, share the link, let people
+            claim a spot.
           </div>
         </div>
 

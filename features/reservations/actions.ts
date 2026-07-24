@@ -5,9 +5,9 @@ import { cancelReasonSchema } from "@/lib/validators";
 import type { ActionResult, Reservation } from "@/types";
 
 function mapClaimError(message: string): string {
-  if (message.includes("SLOT_FULL")) return "Slot is full.";
-  if (message.includes("ALREADY_CLAIMED")) return "You already claimed this slot.";
-  if (message.includes("SLOT_NOT_FOUND")) return "Slot not found.";
+  if (message.includes("SLOT_FULL")) return "Spot is full.";
+  if (message.includes("ALREADY_CLAIMED")) return "You already claimed this spot.";
+  if (message.includes("SLOT_NOT_FOUND")) return "Spot not found.";
   if (message.includes("NOT_A_MEMBER")) return "Join this workspace first.";
   if (message.includes("NOT_AUTHENTICATED")) return "Please sign in.";
   return message;
@@ -18,10 +18,10 @@ function mapCancelError(message: string): string {
     return "Please enter at least 10 characters.";
   }
   if (message.includes("FORBIDDEN")) {
-    return "You can only cancel your own reservation.";
+    return "You can only cancel your own claim.";
   }
-  if (message.includes("NOT_CLAIMED")) return "This reservation is not active.";
-  if (message.includes("RESERVATION_NOT_FOUND")) return "Reservation not found.";
+  if (message.includes("NOT_CLAIMED")) return "This claim is not active.";
+  if (message.includes("RESERVATION_NOT_FOUND")) return "Claim not found.";
   return message;
 }
 

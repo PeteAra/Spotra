@@ -110,7 +110,7 @@ export function LandingPage() {
           Spotra
         </p>
         <h1 className="mt-4 max-w-3xl font-[family-name:var(--font-display)] text-5xl font-semibold leading-[1.05] tracking-tight text-[var(--foreground)] sm:text-6xl md:text-7xl">
-          Open slots.
+          Open spots.
           <br />
           Share the link.
           <br />

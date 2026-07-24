@@ -102,7 +102,7 @@ export function WorkspacesPageClient() {
             <LayoutGrid className="mx-auto h-8 w-8 text-[var(--muted)]" />
             <p className="mt-4 font-medium">No workspaces yet</p>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              Create one to open slots and share a booking link.
+              Create one to open spots and share a booking link.
             </p>
             <Button className="mt-6" onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4" />
@@ -177,8 +177,8 @@ export function WorkspacesPageClient() {
             <DialogTitle>Delete workspace?</DialogTitle>
             <DialogDescription>
               This permanently deletes{" "}
-              <strong>{pendingDelete?.title}</strong>, including all slots and
-              reservation history. This cannot be undone.
+              <strong>{pendingDelete?.title}</strong>, including all spots and
+              claim history. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

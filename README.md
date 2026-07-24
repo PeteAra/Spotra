@@ -1,6 +1,6 @@
 # Spotra
 
-Calendar-based reservation SaaS MVP. Create a workspace, open time slots, share a link, let people claim seats.
+Calendar-based reservation SaaS MVP. Create a workspace, open spots, share a link, let people claim a spot.
 
 **Domain:** [spotra.dev](https://spotra.dev)
 
@@ -61,10 +61,10 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Product flows
 
-1. **Admin** — Landing → Google sign-in → create workspace → add slots (capacity default 1) → share link.
-2. **Participant** — Open share link → Google sign-in (darkened gate until auth) → claim / cancel via slot confirmations.
+1. **Admin** — Landing → Google sign-in → create workspace → add spots (capacity default 1) → share link.
+2. **Participant** — Open share link → Google sign-in (darkened gate until auth) → claim / cancel via spot confirmations.
 3. **Duplicate** — Same weekday in month, all weekdays, or previous month when navigating forward.
-4. **Users** — Admins manage members and view reservation history at `/workspace/[slug]/users`.
+4. **Users** — Admins manage members and view claim history at `/workspace/[slug]/users`.
 
 ## Deploy (Vercel)
 

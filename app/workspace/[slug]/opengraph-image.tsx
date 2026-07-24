@@ -105,7 +105,7 @@ export default async function WorkspaceOpenGraphImage({
               lineHeight: 1.35,
             }}
           >
-            Sign in with Google to claim available time slots.
+            Sign in with Google to claim available spots.
           </div>
         </div>
 

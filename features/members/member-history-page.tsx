@@ -18,9 +18,9 @@ function kindLabel(kind: MemberHistoryItem["kind"]) {
     case "removed":
       return "Removed from workspace";
     case "claimed":
-      return "Claimed a slot";
+      return "Claimed a spot";
     case "cancelled":
-      return "Cancelled a slot";
+      return "Cancelled a spot";
   }
 }
 
@@ -32,7 +32,7 @@ function formatSlotWindow(item: MemberHistoryItem) {
   const times = end
     ? `${format(start, "h:mm a")} – ${format(end, "h:mm a")}`
     : format(start, "h:mm a");
-  const title = item.slot_title?.trim() || "Untitled slot";
+  const title = item.slot_title?.trim() || "Untitled spot";
   return `${title} · ${day} · ${times}`;
 }
 
@@ -41,9 +41,9 @@ function toCsv(items: MemberHistoryItem[]) {
     "timestamp",
     "event",
     "role",
-    "slot_title",
-    "slot_starts_at",
-    "slot_ends_at",
+    "spot_title",
+    "spot_starts_at",
+    "spot_ends_at",
     "cancellation_reason",
   ];
 
@@ -180,7 +180,7 @@ export function MemberHistoryPageClient({
         )}
         {!isLoading && !error && history.length === 0 && (
           <p className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)]">
-            No membership or reservation activity yet.
+            No membership or spot activity yet.
           </p>
         )}
 

@@ -1,4 +1,4 @@
-/** Stable pastel palette for slot titles — same title → same color. */
+/** Stable pastel palette for spot titles — same title → same color. */
 const SLOT_COLORS = [
   { bg: "#d7efe6", border: "#1f6f5b", text: "#145044" }, // teal
   { bg: "#e3edf8", border: "#3b6ea5", text: "#1e3a5f" }, // blue
