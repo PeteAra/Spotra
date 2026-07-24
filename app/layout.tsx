@@ -15,7 +15,21 @@ const body = Source_Sans_3({
   variable: "--font-body",
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://spotra.dev";
+function resolveSiteUrl() {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL ?? "https://spotra.dev";
+  try {
+    const url = new URL(raw);
+    // Link previews require absolute https image URLs in production.
+    if (url.hostname === "spotra.dev") {
+      url.protocol = "https:";
+    }
+    return url;
+  } catch {
+    return new URL("https://spotra.dev");
+  }
+}
+
+const siteUrl = resolveSiteUrl();
 
 export const metadata: Metadata = {
   title: {
@@ -24,7 +38,7 @@ export const metadata: Metadata = {
   },
   description:
     "Create a calendar, open available spots, share the link, let people claim a spot.",
-  metadataBase: new URL(siteUrl),
+  metadataBase: siteUrl,
   openGraph: {
     type: "website",
     locale: "en_US",
