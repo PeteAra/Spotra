@@ -37,6 +37,33 @@ export function WorkspaceHeader({
       ? `${window.location.origin}/workspace/${workspace.slug}`
       : `/workspace/${workspace.slug}`;
 
+  async function handleShare() {
+    const shareData: ShareData = {
+      title: `${workspace.title} — Spotra`,
+      text: `Join ${workspace.title} on Spotra to claim available slots.`,
+      url: shareUrl,
+    };
+
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        if (
+          typeof navigator.canShare !== "function" ||
+          navigator.canShare(shareData)
+        ) {
+          await navigator.share(shareData);
+          return;
+        }
+      } catch (error) {
+        // User dismissed the sheet — don't open the fallback dialog.
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+      }
+    }
+
+    setShareOpen(true);
+  }
+
   return (
     <header className="flex flex-col gap-4 border-b border-[var(--border)] pb-6 sm:flex-row sm:items-center sm:justify-between">
       <div>
@@ -68,7 +95,7 @@ export function WorkspaceHeader({
             </Button>
           </>
         )}
-        <Button onClick={() => setShareOpen(true)}>
+        <Button onClick={handleShare}>
           <Link2 className="h-4 w-4" />
           Share
         </Button>
@@ -90,6 +117,7 @@ export function WorkspaceHeader({
               onClick={async () => {
                 await navigator.clipboard.writeText(shareUrl);
                 setCopied(true);
+                toast.success("Link copied");
                 setTimeout(() => setCopied(false), 2000);
               }}
             >

@@ -15,13 +15,31 @@ const body = Source_Sans_3({
   variable: "--font-body",
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://spotra.dev";
+
 export const metadata: Metadata = {
-  title: "Spotra — Claim time, simply",
+  title: {
+    default: "Spotra — Claim time, simply",
+    template: "%s — Spotra",
+  },
   description:
     "Create a calendar, open available slots, share the link, let people claim seats.",
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL ?? "https://spotra.dev",
-  ),
+  metadataBase: new URL(siteUrl),
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: siteUrl,
+    siteName: "Spotra",
+    title: "Spotra — Claim time, simply",
+    description:
+      "Create a calendar, open available slots, share the link, let people claim seats.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Spotra — Claim time, simply",
+    description:
+      "Create a calendar, open available slots, share the link, let people claim seats.",
+  },
 };
 
 export default function RootLayout({
