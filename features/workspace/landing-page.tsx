@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SignInWithGoogleButton } from "@/features/auth/sign-in-button";
 import { CreateWorkspaceModal } from "@/features/workspace/create-workspace-modal";
@@ -22,14 +23,20 @@ export function LandingPage() {
     const supabase = createClient();
     let cancelled = false;
 
-    async function openCreateFlow() {
+    async function afterSignedIn() {
       if (cancelled) return;
-      setStatusMessage("Opening workspace setup…");
       setAuthed(true);
-      setCreateOpen(true);
-      setSessionReady(true);
-      // Drop ?create=1 so refresh doesn't re-trigger the waiting state
-      router.replace("/", { scroll: false });
+
+      if (wantsCreate) {
+        setStatusMessage("Opening workspace setup…");
+        setCreateOpen(true);
+        setSessionReady(true);
+        router.replace("/", { scroll: false });
+        return;
+      }
+
+      setStatusMessage("Loading your workspaces…");
+      router.replace("/workspaces");
     }
 
     async function resolveSession() {
@@ -40,16 +47,10 @@ export function LandingPage() {
       if (cancelled) return;
 
       if (session) {
-        setAuthed(true);
-        if (wantsCreate) {
-          await openCreateFlow();
-        } else {
-          setSessionReady(true);
-        }
+        await afterSignedIn();
         return;
       }
 
-      // Session cookie can lag right after OAuth redirect — keep waiting briefly
       if (wantsCreate) {
         setStatusMessage("Finishing sign-in…");
         setSessionReady(false);
@@ -70,19 +71,19 @@ export function LandingPage() {
         return;
       }
 
-      setAuthed(true);
       if (wantsCreate && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
-        void openCreateFlow();
+        void afterSignedIn();
+      } else if (!wantsCreate && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
+        void afterSignedIn();
       }
     });
 
-    // Safety timeout so we never spin forever
     const timeout = window.setTimeout(() => {
       if (cancelled || !wantsCreate) return;
       void supabase.auth.getSession().then(({ data }) => {
         if (cancelled) return;
         if (data.session) {
-          void openCreateFlow();
+          void afterSignedIn();
         } else {
           setStatusMessage("");
           setSessionReady(true);
@@ -97,7 +98,9 @@ export function LandingPage() {
     };
   }, [wantsCreate, router]);
 
-  const showBootOverlay = wantsCreate && !createOpen && !sessionReady;
+  const showBootOverlay =
+    (wantsCreate && !createOpen && !sessionReady) ||
+    (authed && !wantsCreate && !createOpen && statusMessage === "Loading your workspaces…");
 
   return (
     <main className="relative overflow-hidden">
@@ -127,19 +130,34 @@ export function LandingPage() {
               Preparing…
             </button>
           ) : authed ? (
-            <button
-              type="button"
-              className="inline-flex h-12 items-center rounded-xl bg-[var(--accent)] px-6 text-base font-medium text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)]"
-              onClick={() => setCreateOpen(true)}
-            >
-              Open a New Workspace
-            </button>
+            <>
+              <Link
+                href="/workspaces"
+                className="inline-flex h-12 items-center rounded-xl bg-[var(--accent)] px-6 text-base font-medium text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)]"
+              >
+                My workspaces
+              </Link>
+              <button
+                type="button"
+                className="inline-flex h-12 items-center rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 text-base font-medium transition hover:bg-[var(--surface-muted)]"
+                onClick={() => setCreateOpen(true)}
+              >
+                Open a New Workspace
+              </button>
+            </>
           ) : (
-            <SignInWithGoogleButton
-              returnTo="/?create=1"
-              label="Open a New Workspace"
-              size="lg"
-            />
+            <>
+              <SignInWithGoogleButton
+                returnTo="/workspaces"
+                label="Sign in"
+                size="lg"
+              />
+              <SignInWithGoogleButton
+                returnTo="/?create=1"
+                label="Open a New Workspace"
+                size="lg"
+              />
+            </>
           )}
         </div>
       </div>
@@ -155,7 +173,7 @@ export function LandingPage() {
               {statusMessage || "Finishing sign-in…"}
             </p>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Hang tight — we&apos;ll open workspace setup next.
+              Hang tight — this only takes a moment.
             </p>
           </div>
         </div>

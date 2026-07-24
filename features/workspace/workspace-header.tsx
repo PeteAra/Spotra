@@ -1,17 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, Link2, Users } from "lucide-react";
+import { Check, Copy, LayoutGrid, Link2, Trash2, Users } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { deleteWorkspace } from "@/features/workspace/actions";
 import type { Workspace, WorkspaceRole } from "@/types";
 
 export function WorkspaceHeader({
@@ -21,8 +25,11 @@ export function WorkspaceHeader({
   workspace: Workspace;
   role: WorkspaceRole;
 }) {
+  const router = useRouter();
   const [shareOpen, setShareOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const shareUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}/workspace/${workspace.slug}`
@@ -39,13 +46,25 @@ export function WorkspaceHeader({
         </h1>
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        <Button variant="secondary" asChild>
+          <Link href="/workspaces">
+            <LayoutGrid className="h-4 w-4" />
+            Workspaces
+          </Link>
+        </Button>
         {role === "admin" && (
-          <Button variant="secondary" asChild>
-            <Link href={`/workspace/${workspace.slug}/users`}>
-              <Users className="h-4 w-4" />
-              Users
-            </Link>
-          </Button>
+          <>
+            <Button variant="secondary" asChild>
+              <Link href={`/workspace/${workspace.slug}/users`}>
+                <Users className="h-4 w-4" />
+                Users
+              </Link>
+            </Button>
+            <Button variant="outline" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          </>
         )}
         <Button onClick={() => setShareOpen(true)}>
           <Link2 className="h-4 w-4" />
@@ -75,6 +94,40 @@ export function WorkspaceHeader({
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this workspace?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes {workspace.title}, including slots and
+              reservation history.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={async () => {
+                setDeleting(true);
+                const result = await deleteWorkspace(workspace.id);
+                setDeleting(false);
+                if (!result.ok) {
+                  toast.error(result.error);
+                  return;
+                }
+                toast.success("Workspace deleted");
+                router.push("/workspaces");
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete workspace"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </header>
