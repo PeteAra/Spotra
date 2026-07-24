@@ -62,6 +62,7 @@ export function CreateWorkspaceModal({
             <Input
               id="title"
               placeholder="Biology Lab Practice Sessions"
+              disabled={form.formState.isSubmitting}
               {...form.register("title")}
             />
             {form.formState.errors.title && (
@@ -72,9 +73,14 @@ export function CreateWorkspaceModal({
           </div>
           <DialogFooter>
             <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? "Creating…" : "Create workspace"}
+              {form.formState.isSubmitting ? "Creating workspace…" : "Create workspace"}
             </Button>
           </DialogFooter>
+          {form.formState.isSubmitting && (
+            <p className="text-center text-sm text-[var(--muted)]">
+              Setting up your calendar…
+            </p>
+          )}
         </form>
       </DialogContent>
     </Dialog>
