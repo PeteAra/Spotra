@@ -36,10 +36,14 @@ export function useSlots(workspaceId: string | undefined, month: Date) {
 
 export function useInvalidateSlots(workspaceId: string | undefined, month: Date) {
   const queryClient = useQueryClient();
-  return () =>
-    queryClient.invalidateQueries({
+  return async () => {
+    await queryClient.invalidateQueries({
       queryKey: ["slots", workspaceId, monthKey(month)],
     });
+    await queryClient.refetchQueries({
+      queryKey: ["slots", workspaceId, monthKey(month)],
+    });
+  };
 }
 
 export function useMembers(workspaceId: string | undefined, enabled = true) {

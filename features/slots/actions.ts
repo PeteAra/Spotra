@@ -1,5 +1,6 @@
 "use server";
 
+import { unstable_noStore as noStore } from "next/cache";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -18,6 +19,13 @@ import type {
   Slot,
   SlotWithReservations,
 } from "@/types";
+
+/** Build a local Date from yyyy-MM-dd + HH:mm without server TZ ambiguity. */
+function dateFromParts(date: string, time: string): Date {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hours, minutes] = time.split(":").map(Number);
+  return new Date(year, month - 1, day, hours, minutes, 0, 0);
+}
 
 async function requireAdmin(workspaceId: string) {
   const supabase = await createClient();
@@ -73,6 +81,8 @@ export async function getSlotsForMonth(input: {
   workspaceId: string;
   monthKey: string;
 }): Promise<ActionResult<SlotWithReservations[]>> {
+  noStore();
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -84,14 +94,17 @@ export async function getSlotsForMonth(input: {
 
   const month = parseMonthKey(input.monthKey);
   const rangeStart = startOfMonth(month).toISOString();
-  const rangeEnd = endOfMonth(month).toISOString();
+  // Use exclusive upper bound at start of next month to avoid end-of-month edge cases
+  const rangeEndExclusive = startOfMonth(
+    new Date(month.getFullYear(), month.getMonth() + 1, 1),
+  ).toISOString();
 
   const { data: slots, error } = await supabase
     .from("slots")
     .select("*")
     .eq("workspace_id", input.workspaceId)
     .gte("starts_at", rangeStart)
-    .lte("starts_at", rangeEnd)
+    .lt("starts_at", rangeEndExclusive)
     .order("starts_at", { ascending: true });
 
   if (error) {
@@ -105,13 +118,22 @@ export async function getSlotsForMonth(input: {
 
   const { data: reservations, error: resError } = await supabase
     .from("reservations")
-    .select("*, account:accounts(id, email, display_name, avatar_url, created_at, updated_at)")
+    .select(
+      "*, account:accounts!reservations_account_id_fkey(id, email, display_name, avatar_url, created_at, updated_at)",
+    )
     .eq("workspace_id", input.workspaceId)
     .in("slot_id", slotIds)
     .eq("status", "claimed");
 
   if (resError) {
-    return { ok: false, error: resError.message };
+    // Still return slots if roster join fails — better than an empty calendar
+    console.error("reservations fetch failed", resError.message);
+    return {
+      ok: true,
+      data: (slots as Slot[]).map((slot) =>
+        toSlotWithReservations(slot, []),
+      ),
+    };
   }
 
   const bySlot = new Map<string, Reservation[]>();
@@ -144,9 +166,8 @@ export async function createSlot(input: {
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
 
-  const day = new Date(`${parsed.data.date}T12:00:00`);
-  const startsAt = combineDateAndTime(day, parsed.data.startTime);
-  const endsAt = combineDateAndTime(day, parsed.data.endTime);
+  const startsAt = dateFromParts(parsed.data.date, parsed.data.startTime);
+  const endsAt = dateFromParts(parsed.data.date, parsed.data.endTime);
 
   const { data, error } = await admin.supabase
     .from("slots")
@@ -193,9 +214,8 @@ export async function updateSlot(input: {
     };
   }
 
-  const day = new Date(`${parsed.data.date}T12:00:00`);
-  const startsAt = combineDateAndTime(day, parsed.data.startTime);
-  const endsAt = combineDateAndTime(day, parsed.data.endTime);
+  const startsAt = dateFromParts(parsed.data.date, parsed.data.startTime);
+  const endsAt = dateFromParts(parsed.data.date, parsed.data.endTime);
 
   const { data, error } = await admin.supabase
     .from("slots")

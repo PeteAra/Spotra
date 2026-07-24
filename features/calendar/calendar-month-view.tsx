@@ -52,7 +52,10 @@ export function CalendarMonthView({
   const [pendingMonth, setPendingMonth] = useState<Date | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const { data: slots = [], isLoading } = useSlots(workspaceId, month);
+  const { data: slots = [], isLoading, error: slotsError } = useSlots(
+    workspaceId,
+    month,
+  );
   const invalidate = useInvalidateSlots(workspaceId, month);
 
   const slotsByDay = useMemo(() => {
@@ -198,6 +201,12 @@ export function CalendarMonthView({
         </div>
         {isLoading && (
           <p className="mt-4 text-sm text-[var(--muted)]">Loading slots…</p>
+        )}
+        {slotsError && (
+          <p className="mt-4 text-sm text-[var(--danger)]">
+            Could not load slots:{" "}
+            {slotsError instanceof Error ? slotsError.message : "Unknown error"}
+          </p>
         )}
       </section>
 

@@ -7,8 +7,14 @@ export const workspaceTitleSchema = z.object({
 export const slotFormSchema = z
   .object({
     date: z.string().min(1),
-    startTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid start time"),
-    endTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid end time"),
+    startTime: z
+      .string()
+      .regex(/^\d{2}:\d{2}(:\d{2})?$/, "Invalid start time")
+      .transform((t) => t.slice(0, 5)),
+    endTime: z
+      .string()
+      .regex(/^\d{2}:\d{2}(:\d{2})?$/, "Invalid end time")
+      .transform((t) => t.slice(0, 5)),
     capacity: z.coerce.number().int().min(1).max(100),
   })
   .refine((data) => data.endTime > data.startTime, {

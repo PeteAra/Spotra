@@ -24,7 +24,7 @@ export function DayDetailPanel({
   workspaceId: string;
   onAddSlot: () => void;
   onEditSlot: (slot: SlotWithReservations) => void;
-  onSlotsChanged: () => void;
+  onSlotsChanged: () => void | Promise<void>;
 }) {
   if (!day) {
     return (

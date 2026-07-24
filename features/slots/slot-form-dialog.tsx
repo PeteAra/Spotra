@@ -32,7 +32,7 @@ export function SlotFormDialog({
   workspaceId: string;
   day: Date;
   slot: SlotWithReservations | null;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
 }) {
   const form = useForm<SlotFormInput>({
     resolver: zodResolver(slotFormSchema),
@@ -88,7 +88,7 @@ export function SlotFormDialog({
             }
             toast.success(slot ? "Slot updated" : "Slot created");
             onOpenChange(false);
-            onSaved();
+            await onSaved();
           })}
         >
           <div className="grid grid-cols-2 gap-3">
