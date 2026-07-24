@@ -44,7 +44,11 @@ export default async function WorkspaceUsersPage({
           <Link href={`/workspace/${slug}`}>Back to calendar</Link>
         </Button>
       </div>
-      <MembersTable workspaceId={result.data.workspace.id} />
+      <MembersTable
+        workspaceId={result.data.workspace.id}
+        workspaceSlug={slug}
+        currentAccountId={user.id}
+      />
     </div>
   );
 }

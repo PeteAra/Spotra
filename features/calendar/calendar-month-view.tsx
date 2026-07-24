@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { format, isSameDay, isToday } from "date-fns";
 import { ChevronLeft, ChevronRight, Copy, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -51,6 +51,22 @@ export function CalendarMonthView({
   const [duplicatePromptOpen, setDuplicatePromptOpen] = useState(false);
   const [pendingMonth, setPendingMonth] = useState<Date | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const detailRef = useRef<HTMLDivElement>(null);
+
+  const selectDay = useCallback((day: Date) => {
+    setSelectedDay(day);
+    // On stacked (mobile) layouts the detail card sits below the grid, so
+    // bring it into view once the selection has rendered.
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      requestAnimationFrame(() => {
+        detailRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    }
+  }, []);
 
   const { data: slots = [], isLoading, error: slotsError } = useSlots(
     workspaceId,
@@ -172,7 +188,7 @@ export function CalendarMonthView({
                 key={key}
                 type="button"
                 disabled={!inMonth}
-                onClick={() => setSelectedDay(day)}
+                onClick={() => selectDay(day)}
                 className={cn(
                   "min-h-[4.5rem] rounded-2xl border p-2 text-left transition sm:min-h-[5.5rem]",
                   inMonth
@@ -210,22 +226,24 @@ export function CalendarMonthView({
         )}
       </section>
 
-      <DayDetailPanel
-        day={selectedDay}
-        slots={selectedSlots}
-        role={role}
-        accountId={accountId}
-        workspaceId={workspaceId}
-        onAddSlot={() => {
-          setEditingSlot(null);
-          setSlotFormOpen(true);
-        }}
-        onEditSlot={(slot) => {
-          setEditingSlot(slot);
-          setSlotFormOpen(true);
-        }}
-        onSlotsChanged={invalidate}
-      />
+      <div ref={detailRef} className="scroll-mt-4">
+        <DayDetailPanel
+          day={selectedDay}
+          slots={selectedSlots}
+          role={role}
+          accountId={accountId}
+          workspaceId={workspaceId}
+          onAddSlot={() => {
+            setEditingSlot(null);
+            setSlotFormOpen(true);
+          }}
+          onEditSlot={(slot) => {
+            setEditingSlot(slot);
+            setSlotFormOpen(true);
+          }}
+          onSlotsChanged={invalidate}
+        />
+      </div>
 
       {selectedDay && (
         <SlotFormDialog

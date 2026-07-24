@@ -29,6 +29,37 @@ export type WorkspaceMember = {
   account?: Account;
 };
 
+export type MemberEventType = "joined" | "left" | "removed";
+
+export type MemberEvent = {
+  id: string;
+  workspace_id: string;
+  account_id: string;
+  event_type: MemberEventType;
+  role: WorkspaceRole;
+  actor_id: string | null;
+  occurred_at: string;
+};
+
+export type MemberHistoryKind =
+  | "joined"
+  | "left"
+  | "removed"
+  | "claimed"
+  | "cancelled";
+
+export type MemberHistoryItem = {
+  id: string;
+  kind: MemberHistoryKind;
+  occurred_at: string;
+  role?: WorkspaceRole;
+  slot_id?: string;
+  slot_title?: string;
+  slot_starts_at?: string;
+  slot_ends_at?: string;
+  cancellation_reason?: string | null;
+};
+
 export type Slot = {
   id: string;
   workspace_id: string;

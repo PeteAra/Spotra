@@ -1,41 +1,109 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { removeMember } from "@/features/members/actions";
-import { useMemberHistory, useMembers } from "@/hooks/use-workspace-data";
+import { useMembers } from "@/hooks/use-workspace-data";
 import type { Account, WorkspaceMember } from "@/types";
 
-export function MembersTable({ workspaceId }: { workspaceId: string }) {
+export function MembersTable({
+  workspaceId,
+  workspaceSlug,
+  currentAccountId,
+}: {
+  workspaceId: string;
+  workspaceSlug: string;
+  currentAccountId: string;
+}) {
   const { data: members = [], isLoading, refetch } = useMembers(workspaceId);
-  const [selected, setSelected] = useState<
-    (WorkspaceMember & { account: Account }) | null
-  >(null);
 
   if (isLoading) {
     return <p className="text-[var(--muted)]">Loading members…</p>;
   }
 
+  async function onRemove(member: WorkspaceMember & { account: Account }) {
+    const result = await removeMember({
+      workspaceId,
+      accountId: member.account_id,
+    });
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Member removed");
+    refetch();
+  }
+
+  function canRemove(member: WorkspaceMember) {
+    // Admins manage participants (and other admins). Self-removal is via
+    // Leave on /workspaces or Delete workspace — never Remove on this page.
+    return member.account_id !== currentAccountId;
+  }
+
   return (
     <>
-      <div className="overflow-hidden rounded-2xl border border-[var(--border)]">
+      {/* Mobile: stacked cards so actions stay visible */}
+      <ul className="space-y-3 md:hidden">
+        {members.map((member) => (
+          <li
+            key={member.id}
+            className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4"
+          >
+            <div className="flex items-start gap-3">
+              <Avatar>
+                <AvatarImage src={member.account.avatar_url ?? undefined} />
+                <AvatarFallback>
+                  {member.account.display_name.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">
+                  {member.account.display_name}
+                </p>
+                <p className="truncate text-xs text-[var(--muted)]">
+                  {member.account.email}
+                </p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  <span className="capitalize">{member.role}</span>
+                  {" · "}Joined {format(new Date(member.joined_at), "MMM d, yyyy")}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" asChild className="flex-1">
+                <Link
+                  href={`/workspace/${workspaceSlug}/users/${member.account_id}/history`}
+                >
+                  History
+                </Link>
+              </Button>
+              {canRemove(member) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => onRemove(member)}
+                >
+                  Remove
+                </Button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {/* Desktop: table */}
+      <div className="hidden overflow-hidden rounded-2xl border border-[var(--border)] md:block">
         <table className="w-full text-left text-sm">
           <thead className="bg-[var(--surface-muted)] text-[var(--muted)]">
             <tr>
               <th className="px-4 py-3 font-medium">Member</th>
               <th className="px-4 py-3 font-medium">Role</th>
               <th className="px-4 py-3 font-medium">Joined</th>
-              <th className="px-4 py-3 font-medium" />
+              <th className="px-4 py-3 font-medium text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -45,13 +113,11 @@ export function MembersTable({ workspaceId }: { workspaceId: string }) {
                 className="border-t border-[var(--border)] bg-[var(--surface)]"
               >
                 <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    className="flex items-center gap-3 text-left"
-                    onClick={() => setSelected(member)}
-                  >
+                  <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src={member.account.avatar_url ?? undefined} />
+                      <AvatarImage
+                        src={member.account.avatar_url ?? undefined}
+                      />
                       <AvatarFallback>
                         {member.account.display_name.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
@@ -64,109 +130,37 @@ export function MembersTable({ workspaceId }: { workspaceId: string }) {
                         {member.account.email}
                       </span>
                     </span>
-                  </button>
+                  </div>
                 </td>
                 <td className="px-4 py-3 capitalize">{member.role}</td>
                 <td className="px-4 py-3 text-[var(--muted)]">
                   {format(new Date(member.joined_at), "MMM d, yyyy")}
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={async () => {
-                      const result = await removeMember({
-                        workspaceId,
-                        accountId: member.account_id,
-                      });
-                      if (!result.ok) {
-                        toast.error(result.error);
-                        return;
-                      }
-                      toast.success("Member removed");
-                      refetch();
-                    }}
-                  >
-                    Remove
-                  </Button>
+                <td className="px-4 py-3">
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button size="sm" variant="secondary" asChild>
+                      <Link
+                        href={`/workspace/${workspaceSlug}/users/${member.account_id}/history`}
+                      >
+                        History
+                      </Link>
+                    </Button>
+                    {canRemove(member) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onRemove(member)}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
-      <MemberDetailDrawer
-        workspaceId={workspaceId}
-        member={selected}
-        onClose={() => setSelected(null)}
-      />
     </>
-  );
-}
-
-function MemberDetailDrawer({
-  workspaceId,
-  member,
-  onClose,
-}: {
-  workspaceId: string;
-  member: (WorkspaceMember & { account: Account }) | null;
-  onClose: () => void;
-}) {
-  const { data: history = [] } = useMemberHistory(
-    workspaceId,
-    member?.account_id,
-  );
-
-  return (
-    <Dialog open={Boolean(member)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
-        {member && (
-          <>
-            <DialogHeader>
-              <DialogTitle>{member.account.display_name}</DialogTitle>
-              <DialogDescription>{member.account.email}</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3">
-              <p className="text-sm text-[var(--muted)]">
-                Role: <span className="capitalize text-[var(--foreground)]">{member.role}</span>
-                {" · "}Joined {format(new Date(member.joined_at), "PPpp")}
-              </p>
-              <h4 className="font-semibold">Reservation history</h4>
-              {history.length === 0 ? (
-                <p className="text-sm text-[var(--muted)]">No reservations yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {history.map((row) => (
-                    <li
-                      key={row.id}
-                      className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-sm"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="capitalize font-medium">{row.status}</span>
-                        <span className="text-xs text-[var(--muted)]">
-                          {format(new Date(row.claimed_at), "PPp")}
-                        </span>
-                      </div>
-                      {row.status === "cancelled" && (
-                        <p className="mt-2 text-[var(--muted)]">
-                          {row.cancellation_reason}
-                          {row.cancelled_at && (
-                            <span className="block text-xs">
-                              Cancelled {format(new Date(row.cancelled_at), "PPp")}
-                            </span>
-                          )}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
   );
 }

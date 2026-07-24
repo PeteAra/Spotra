@@ -1,7 +1,13 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import type { Account, ActionResult, Reservation, WorkspaceMember } from "@/types";
+import type {
+  Account,
+  ActionResult,
+  MemberEvent,
+  MemberHistoryItem,
+  WorkspaceMember,
+} from "@/types";
 
 async function requireAdmin(workspaceId: string) {
   const supabase = await createClient();
@@ -54,22 +60,141 @@ export async function listMembers(
   };
 }
 
-export async function getMemberHistory(input: {
+export async function getMemberProfile(input: {
   workspaceId: string;
   accountId: string;
-}): Promise<ActionResult<Reservation[]>> {
+}): Promise<
+  ActionResult<{
+    account: Account;
+    member: WorkspaceMember | null;
+  }>
+> {
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
 
-  const { data, error } = await admin.supabase
-    .from("reservations")
+  const { data: account, error: accountError } = await admin.supabase
+    .from("accounts")
+    .select("id, email, display_name, avatar_url, created_at, updated_at")
+    .eq("id", input.accountId)
+    .maybeSingle();
+
+  if (accountError) return { ok: false, error: accountError.message };
+  if (!account) return { ok: false, error: "User not found." };
+
+  const { data: member } = await admin.supabase
+    .from("workspace_members")
     .select("*")
     .eq("workspace_id", input.workspaceId)
     .eq("account_id", input.accountId)
-    .order("claimed_at", { ascending: false });
+    .maybeSingle();
 
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, data: (data ?? []) as Reservation[] };
+  return {
+    ok: true,
+    data: {
+      account: account as Account,
+      member: (member as WorkspaceMember | null) ?? null,
+    },
+  };
+}
+
+export async function getMemberHistory(input: {
+  workspaceId: string;
+  accountId: string;
+}): Promise<ActionResult<MemberHistoryItem[]>> {
+  const admin = await requireAdmin(input.workspaceId);
+  if (!admin.ok) return { ok: false, error: admin.error };
+
+  const [eventsResult, reservationsResult] = await Promise.all([
+    admin.supabase
+      .from("member_events")
+      .select("*")
+      .eq("workspace_id", input.workspaceId)
+      .eq("account_id", input.accountId)
+      .order("occurred_at", { ascending: false }),
+    admin.supabase
+      .from("reservations")
+      .select(
+        "id, status, claimed_at, cancelled_at, cancellation_reason, slot_id, slot:slots(id, title, starts_at, ends_at)",
+      )
+      .eq("workspace_id", input.workspaceId)
+      .eq("account_id", input.accountId)
+      .order("claimed_at", { ascending: false }),
+  ]);
+
+  if (eventsResult.error) {
+    return { ok: false, error: eventsResult.error.message };
+  }
+  if (reservationsResult.error) {
+    return { ok: false, error: reservationsResult.error.message };
+  }
+
+  const items: MemberHistoryItem[] = [];
+
+  for (const event of (eventsResult.data ?? []) as MemberEvent[]) {
+    items.push({
+      id: `event-${event.id}`,
+      kind: event.event_type,
+      occurred_at: event.occurred_at,
+      role: event.role,
+    });
+  }
+
+  type ReservationRow = {
+    id: string;
+    status: "claimed" | "cancelled";
+    claimed_at: string;
+    cancelled_at: string | null;
+    cancellation_reason: string | null;
+    slot_id: string;
+    slot:
+      | {
+          id: string;
+          title: string;
+          starts_at: string;
+          ends_at: string;
+        }
+      | {
+          id: string;
+          title: string;
+          starts_at: string;
+          ends_at: string;
+        }[]
+      | null;
+  };
+
+  for (const row of (reservationsResult.data ?? []) as ReservationRow[]) {
+    const slot = Array.isArray(row.slot) ? row.slot[0] : row.slot;
+
+    items.push({
+      id: `claim-${row.id}`,
+      kind: "claimed",
+      occurred_at: row.claimed_at,
+      slot_id: row.slot_id,
+      slot_title: slot?.title || undefined,
+      slot_starts_at: slot?.starts_at,
+      slot_ends_at: slot?.ends_at,
+    });
+
+    if (row.status === "cancelled" && row.cancelled_at) {
+      items.push({
+        id: `cancel-${row.id}`,
+        kind: "cancelled",
+        occurred_at: row.cancelled_at,
+        slot_id: row.slot_id,
+        slot_title: slot?.title || undefined,
+        slot_starts_at: slot?.starts_at,
+        slot_ends_at: slot?.ends_at,
+        cancellation_reason: row.cancellation_reason,
+      });
+    }
+  }
+
+  items.sort(
+    (a, b) =>
+      new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime(),
+  );
+
+  return { ok: true, data: items };
 }
 
 export async function removeMember(input: {
@@ -80,15 +205,11 @@ export async function removeMember(input: {
   if (!admin.ok) return { ok: false, error: admin.error };
 
   if (admin.user!.id === input.accountId) {
-    const { count } = await admin.supabase
-      .from("workspace_members")
-      .select("*", { count: "exact", head: true })
-      .eq("workspace_id", input.workspaceId)
-      .eq("role", "admin");
-
-    if ((count ?? 0) <= 1) {
-      return { ok: false, error: "You cannot remove the last admin." };
-    }
+    return {
+      ok: false,
+      error:
+        "You can't remove yourself here. Leave from Workspaces, or delete the workspace.",
+    };
   }
 
   const { error } = await admin.supabase
