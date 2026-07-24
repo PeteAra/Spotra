@@ -106,10 +106,24 @@ export function LandingPage() {
     <main className="relative overflow-hidden">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,var(--accent-soft),transparent_45%),radial-gradient(circle_at_80%_0%,color-mix(in_srgb,var(--success)_18%,transparent),transparent_40%),linear-gradient(160deg,var(--background),var(--surface-muted))]" />
       <div className="relative mx-auto flex min-h-screen max-w-5xl flex-col justify-center px-6 py-16">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[var(--accent)]">
-          Spotra
-        </p>
-        <h1 className="mt-4 max-w-3xl font-[family-name:var(--font-display)] text-5xl font-semibold leading-[1.05] tracking-tight text-[var(--foreground)] sm:text-6xl md:text-7xl">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <img
+            src="/brand/spotra-mark.png"
+            alt=""
+            width={56}
+            height={56}
+            className="h-12 w-12 shrink-0 sm:h-14 sm:w-14"
+          />
+          <div>
+            <p className="font-[family-name:var(--font-body)] text-2xl font-semibold tracking-tight text-[#0F2E1F] sm:text-3xl">
+              Spotra
+            </p>
+            <p className="mt-0.5 text-sm text-[var(--muted)] sm:text-base">
+              Share your time. Simplify scheduling.
+            </p>
+          </div>
+        </div>
+        <h1 className="mt-8 max-w-3xl font-[family-name:var(--font-display)] text-5xl font-semibold leading-[1.05] tracking-tight text-[var(--foreground)] sm:mt-10 sm:text-6xl md:text-7xl">
           Open spots.
           <br />
           Share the link.
