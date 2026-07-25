@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SignInWithGoogleButton } from "@/features/auth/sign-in-button";
 import { CreateWorkspaceModal } from "@/features/workspace/create-workspace-modal";
+import {
+  clearAuthReturnCookie,
+  readAuthReturnCookie,
+} from "@/lib/auth-return";
 import { createClient } from "@/lib/supabase/browser";
 
 export function LandingPage() {
@@ -26,6 +30,15 @@ export function LandingPage() {
     async function afterSignedIn() {
       if (cancelled) return;
       setAuthed(true);
+
+      // Safety net: if OAuth fell back to / but a workspace return path was saved.
+      const pendingReturn = readAuthReturnCookie();
+      if (pendingReturn && pendingReturn !== "/") {
+        clearAuthReturnCookie();
+        setStatusMessage("Opening workspace…");
+        router.replace(pendingReturn);
+        return;
+      }
 
       if (wantsCreate) {
         setStatusMessage("Opening workspace setup…");
@@ -100,7 +113,11 @@ export function LandingPage() {
 
   const showBootOverlay =
     (wantsCreate && !createOpen && !sessionReady) ||
-    (authed && !wantsCreate && !createOpen && statusMessage === "Loading your workspaces…");
+    (authed &&
+      !wantsCreate &&
+      !createOpen &&
+      (statusMessage === "Loading your workspaces…" ||
+        statusMessage === "Opening workspace…"));
 
   return (
     <main className="relative overflow-hidden">
