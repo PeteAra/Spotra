@@ -15,6 +15,7 @@ export async function generateMetadata({
     return {
       title: "Workspace not found",
       description: "This Spotra workspace could not be found.",
+      robots: { index: false, follow: false },
     };
   }
 
@@ -25,6 +26,8 @@ export async function generateMetadata({
   return {
     title,
     description,
+    // Private invite pages: crawlable for link previews, but not indexed.
+    robots: { index: false, follow: false },
     openGraph: {
       title: `${title} — Spotra`,
       description,
