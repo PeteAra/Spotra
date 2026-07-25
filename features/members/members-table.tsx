@@ -5,9 +5,9 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { removeMember } from "@/features/members/actions";
+import { removeMember, setMemberRole } from "@/features/members/actions";
 import { useMembers } from "@/hooks/use-workspace-data";
-import type { Account, WorkspaceMember } from "@/types";
+import type { Account, WorkspaceMember, WorkspaceRole } from "@/types";
 
 export function MembersTable({
   workspaceId,
@@ -24,6 +24,8 @@ export function MembersTable({
     return <p className="text-[var(--muted)]">Loading members…</p>;
   }
 
+  const adminCount = members.filter((m) => m.role === "admin").length;
+
   async function onRemove(member: WorkspaceMember & { account: Account }) {
     const result = await removeMember({
       workspaceId,
@@ -37,10 +39,90 @@ export function MembersTable({
     refetch();
   }
 
+  async function onSetRole(
+    member: WorkspaceMember & { account: Account },
+    role: WorkspaceRole,
+  ) {
+    const result = await setMemberRole({
+      workspaceId,
+      accountId: member.account_id,
+      role,
+    });
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(
+      role === "admin" ? "Member is now an admin" : "Member is now a participant",
+    );
+    refetch();
+  }
+
   function canRemove(member: WorkspaceMember) {
-    // Admins manage participants (and other admins). Self-removal is via
-    // Leave on /workspaces or Delete workspace — never Remove on this page.
+    // Self-removal is via Leave on /workspaces or Delete workspace.
     return member.account_id !== currentAccountId;
+  }
+
+  function canPromote(member: WorkspaceMember) {
+    return member.role === "participant";
+  }
+
+  function canDemote(member: WorkspaceMember) {
+    // Allow demoting other admins, and yourself only when another admin exists.
+    if (member.role !== "admin") return false;
+    if (member.account_id === currentAccountId) return adminCount > 1;
+    return true;
+  }
+
+  function ActionButtons({
+    member,
+    stretch,
+  }: {
+    member: WorkspaceMember & { account: Account };
+    stretch?: boolean;
+  }) {
+    const flex = stretch ? "flex-1" : undefined;
+    return (
+      <>
+        <Button size="sm" variant="secondary" asChild className={flex}>
+          <Link
+            href={`/workspace/${workspaceSlug}/users/${member.account_id}/history`}
+          >
+            History
+          </Link>
+        </Button>
+        {canPromote(member) && (
+          <Button
+            size="sm"
+            variant="outline"
+            className={flex}
+            onClick={() => onSetRole(member, "admin")}
+          >
+            Make admin
+          </Button>
+        )}
+        {canDemote(member) && (
+          <Button
+            size="sm"
+            variant="outline"
+            className={flex}
+            onClick={() => onSetRole(member, "participant")}
+          >
+            Make participant
+          </Button>
+        )}
+        {canRemove(member) && (
+          <Button
+            size="sm"
+            variant="outline"
+            className={flex}
+            onClick={() => onRemove(member)}
+          >
+            Remove
+          </Button>
+        )}
+      </>
+    );
   }
 
   return (
@@ -62,6 +144,7 @@ export function MembersTable({
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">
                   {member.account.display_name}
+                  {member.account_id === currentAccountId ? " (you)" : ""}
                 </p>
                 <p className="truncate text-xs text-[var(--muted)]">
                   {member.account.email}
@@ -73,23 +156,7 @@ export function MembersTable({
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" asChild className="flex-1">
-                <Link
-                  href={`/workspace/${workspaceSlug}/users/${member.account_id}/history`}
-                >
-                  History
-                </Link>
-              </Button>
-              {canRemove(member) && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => onRemove(member)}
-                >
-                  Remove
-                </Button>
-              )}
+              <ActionButtons member={member} stretch />
             </div>
           </li>
         ))}
@@ -125,6 +192,7 @@ export function MembersTable({
                     <span>
                       <span className="block font-medium">
                         {member.account.display_name}
+                        {member.account_id === currentAccountId ? " (you)" : ""}
                       </span>
                       <span className="block text-xs text-[var(--muted)]">
                         {member.account.email}
@@ -138,22 +206,7 @@ export function MembersTable({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap justify-end gap-2">
-                    <Button size="sm" variant="secondary" asChild>
-                      <Link
-                        href={`/workspace/${workspaceSlug}/users/${member.account_id}/history`}
-                      >
-                        History
-                      </Link>
-                    </Button>
-                    {canRemove(member) && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onRemove(member)}
-                      >
-                        Remove
-                      </Button>
-                    )}
+                    <ActionButtons member={member} />
                   </div>
                 </td>
               </tr>

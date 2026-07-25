@@ -7,6 +7,7 @@ import type {
   MemberEvent,
   MemberHistoryItem,
   WorkspaceMember,
+  WorkspaceRole,
 } from "@/types";
 
 async function requireAdmin(workspaceId: string) {
@@ -195,6 +196,59 @@ export async function getMemberHistory(input: {
   );
 
   return { ok: true, data: items };
+}
+
+export async function setMemberRole(input: {
+  workspaceId: string;
+  accountId: string;
+  role: WorkspaceRole;
+}): Promise<ActionResult> {
+  const admin = await requireAdmin(input.workspaceId);
+  if (!admin.ok) return { ok: false, error: admin.error };
+
+  if (input.role !== "admin" && input.role !== "participant") {
+    return { ok: false, error: "Invalid role." };
+  }
+
+  const { data: target, error: targetError } = await admin.supabase
+    .from("workspace_members")
+    .select("role")
+    .eq("workspace_id", input.workspaceId)
+    .eq("account_id", input.accountId)
+    .maybeSingle();
+
+  if (targetError) return { ok: false, error: targetError.message };
+  if (!target) return { ok: false, error: "Member not found." };
+
+  if (target.role === input.role) {
+    return { ok: true, data: undefined };
+  }
+
+  // Don't demote the last admin (including demoting yourself).
+  if (target.role === "admin" && input.role === "participant") {
+    const { count } = await admin.supabase
+      .from("workspace_members")
+      .select("*", { count: "exact", head: true })
+      .eq("workspace_id", input.workspaceId)
+      .eq("role", "admin");
+
+    if ((count ?? 0) <= 1) {
+      return {
+        ok: false,
+        error:
+          "You can't demote the last admin. Promote someone else first, or delete the workspace.",
+      };
+    }
+  }
+
+  const { error } = await admin.supabase
+    .from("workspace_members")
+    .update({ role: input.role })
+    .eq("workspace_id", input.workspaceId)
+    .eq("account_id", input.accountId);
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: undefined };
 }
 
 export async function removeMember(input: {
