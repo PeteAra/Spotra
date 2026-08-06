@@ -90,9 +90,9 @@ export function SlotFormDialog({
   );
 
   const repeatCount = useMemo(() => {
-    if (slot || !watchedRepeat || watchedRepeat === "none") return 1;
+    if (!watchedRepeat || watchedRepeat === "none") return 1;
     return expandRepeatDates(format(day, "yyyy-MM-dd"), watchedRepeat).length;
-  }, [day, slot, watchedRepeat]);
+  }, [day, watchedRepeat]);
 
   useEffect(() => {
     if (!open) return;
@@ -145,7 +145,20 @@ export function SlotFormDialog({
                 toast.error(result.error);
                 return;
               }
-              toast.success("Time slot updated");
+              if (result.data.createdAdditional > 0) {
+                toast.success(
+                  `Updated slot and created ${result.data.createdAdditional} more` +
+                    (result.data.skipped
+                      ? ` (${result.data.skipped} skipped — overlapping times)`
+                      : ""),
+                );
+              } else if (result.data.skipped > 0) {
+                toast.success(
+                  `Time slot updated (${result.data.skipped} overlapping times skipped)`,
+                );
+              } else {
+                toast.success("Time slot updated");
+              }
             } else {
               const result = await createSlot({
                 workspaceId,
@@ -284,40 +297,42 @@ export function SlotFormDialog({
             </p>
           )}
 
-          {!slot && (
-            <div className="space-y-2">
-              <Label htmlFor="repeat">Repeat</Label>
-              <div className="relative">
-                <select
-                  id="repeat"
-                  className={selectClassName}
-                  value={watchedRepeat ?? "none"}
-                  onChange={(e) =>
-                    form.setValue(
-                      "repeat",
-                      e.target.value as (typeof slotRepeatRules)[number],
-                      { shouldDirty: true, shouldValidate: true },
-                    )
-                  }
-                >
-                  {repeatOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]"
-                  aria-hidden
-                />
-              </div>
-              <p className="text-xs text-[var(--muted)]">
-                {watchedRepeat && watchedRepeat !== "none"
-                  ? `Creates ${repeatCount} time slot${repeatCount === 1 ? "" : "s"} through the end of ${monthLabel}.`
-                  : "Only creates this one time slot."}
-              </p>
+          <div className="space-y-2">
+            <Label htmlFor="repeat">Repeat</Label>
+            <div className="relative">
+              <select
+                id="repeat"
+                className={selectClassName}
+                value={watchedRepeat ?? "none"}
+                onChange={(e) =>
+                  form.setValue(
+                    "repeat",
+                    e.target.value as (typeof slotRepeatRules)[number],
+                    { shouldDirty: true, shouldValidate: true },
+                  )
+                }
+              >
+                {repeatOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]"
+                aria-hidden
+              />
             </div>
-          )}
+            <p className="text-xs text-[var(--muted)]">
+              {watchedRepeat && watchedRepeat !== "none"
+                ? slot
+                  ? `Updates this slot and creates ${repeatCount - 1} more through the end of ${monthLabel}. Overlapping times are skipped.`
+                  : `Creates ${repeatCount} time slot${repeatCount === 1 ? "" : "s"} through the end of ${monthLabel}.`
+                : slot
+                  ? "Only updates this one time slot."
+                  : "Only creates this one time slot."}
+            </p>
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="capacity">Capacity (participants)</Label>

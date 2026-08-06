@@ -414,8 +414,11 @@ export async function updateSlot(input: {
   endTime: string;
   capacity: number;
   colorKey?: string | null;
+  repeat?: "none" | "daily" | "weekly" | "weekdays";
   timeZoneOffsetMinutes: number;
-}): Promise<ActionResult<Slot>> {
+}): Promise<
+  ActionResult<{ slot: Slot; createdAdditional: number; skipped: number }>
+> {
   const parsed = slotFormSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid spot" };
@@ -506,13 +509,95 @@ export async function updateSlot(input: {
     };
   }
 
+  let createdAdditional = 0;
+  let skipped = 0;
+  const repeat = parsed.data.repeat ?? "none";
+
+  if (repeat !== "none") {
+    const extraDates = expandRepeatDates(parsed.data.date, repeat).filter(
+      (date) => date !== parsed.data.date,
+    );
+
+    if (extraDates.length > 0) {
+      const candidates = extraDates.map((date) => {
+        const extraStart = wallDateTimeToUtc(
+          date,
+          parsed.data.startTime,
+          input.timeZoneOffsetMinutes,
+        );
+        const extraEnd = wallDateTimeToUtc(
+          date,
+          parsed.data.endTime,
+          input.timeZoneOffsetMinutes,
+        );
+        return {
+          workspace_id: input.workspaceId,
+          title: parsed.data.title,
+          color_key: parsed.data.colorKey ?? null,
+          starts_at: extraStart.toISOString(),
+          ends_at: extraEnd.toISOString(),
+          capacity: parsed.data.capacity,
+          created_by: admin.user!.id,
+        };
+      });
+
+      const rangeStart = candidates.reduce(
+        (min, row) => (row.starts_at < min ? row.starts_at : min),
+        candidates[0]!.starts_at,
+      );
+      const rangeEnd = candidates.reduce(
+        (max, row) => (row.ends_at > max ? row.ends_at : max),
+        candidates[0]!.ends_at,
+      );
+
+      try {
+        const existingExtras = await getOverlappingSlotsInRange(
+          admin.supabase,
+          input.workspaceId,
+          rangeStart,
+          rangeEnd,
+        );
+        const { kept: rows, skipped: skippedExtras } = filterNonOverlappingSlots(
+          candidates,
+          existingExtras,
+        );
+        skipped = skippedExtras;
+
+        if (rows.length > 0) {
+          const { data: inserted, error: insertError } = await admin.supabase
+            .from("slots")
+            .insert(rows)
+            .select("id");
+
+          if (insertError) {
+            return { ok: false, error: slotWriteErrorMessage(insertError.message) };
+          }
+          createdAdditional = inserted?.length ?? 0;
+        }
+      } catch (e) {
+        return {
+          ok: false,
+          error:
+            e instanceof Error ? e.message : "Could not create repeated slots.",
+        };
+      }
+    }
+  }
+
   const { data: fresh } = await admin.supabase
     .from("slots")
     .select("*")
     .eq("id", input.slotId)
     .single();
 
-  return { ok: true, data: (fresh ?? data) as Slot };
+  return {
+    ok: true,
+    data: {
+      slot: (fresh ?? data) as Slot,
+      createdAdditional,
+      skipped,
+    },
+  };
 }
 
 export async function deleteSlot(input: {
@@ -850,6 +935,65 @@ export async function deleteSlotsInMonth(input: {
     .eq("workspace_id", input.workspaceId)
     .gte("starts_at", rangeStart)
     .lt("starts_at", endExclusive);
+
+  if (error) return { ok: false, error: error.message };
+
+  let deleted = 0;
+  let skipped = 0;
+
+  for (const slot of slots ?? []) {
+    const { count: activeClaims, error: countError } = await admin.supabase
+      .from("reservations")
+      .select("*", { count: "exact", head: true })
+      .eq("slot_id", slot.id)
+      .eq("status", "claimed");
+
+    if (countError || (activeClaims ?? 0) > 0) {
+      skipped += 1;
+      continue;
+    }
+
+    const { error: historyError } = await admin.supabase
+      .from("reservations")
+      .delete()
+      .eq("slot_id", slot.id);
+
+    if (historyError) {
+      skipped += 1;
+      continue;
+    }
+
+    const { error: delError } = await admin.supabase
+      .from("slots")
+      .delete()
+      .eq("id", slot.id);
+
+    if (delError) {
+      skipped += 1;
+    } else {
+      deleted += 1;
+    }
+  }
+
+  return { ok: true, data: { deleted, skipped } };
+}
+
+export async function deleteSlotsInDay(input: {
+  workspaceId: string;
+  date: string;
+  timeZoneOffsetMinutes: number;
+}): Promise<ActionResult<{ deleted: number; skipped: number }>> {
+  const admin = await requireAdmin(input.workspaceId);
+  if (!admin.ok) return { ok: false, error: admin.error };
+
+  const { start, end } = dayBoundsUtc(input.date, input.timeZoneOffsetMinutes);
+
+  const { data: slots, error } = await admin.supabase
+    .from("slots")
+    .select("id")
+    .eq("workspace_id", input.workspaceId)
+    .gte("starts_at", start)
+    .lte("starts_at", end);
 
   if (error) return { ok: false, error: error.message };
 
