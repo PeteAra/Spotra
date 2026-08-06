@@ -310,5 +310,8 @@ function mapRpcError(message: string): string {
   if (message.includes("NOT_A_MEMBER")) {
     return "You are not a member of this workspace.";
   }
+  if (message.includes("LAST_ADMIN")) {
+    return "You're the only admin. Delete the workspace instead, or add another admin first.";
+  }
   return message;
 }

@@ -1,9 +1,5 @@
--- When the workspace creator leaves (or the last admin leaves), delete the
--- workspace instead of leaving it with no owner / only participants.
---
--- DISABLED for now (see 20260806140000_disable_leave_deletes_workspace.sql):
--- accidental Leave by a sole admin/creator would wipe a real client's calendar.
--- Re-enable only with strong confirmation UX.
+-- Safer leave: never auto-delete a workspace.
+-- Last admin must use the explicit Delete action instead.
 
 create or replace function public.leave_workspace(p_workspace_id uuid)
 returns jsonb
@@ -17,7 +13,6 @@ declare
   v_membership public.workspace_members;
   v_admin_count integer;
   v_claim record;
-  v_should_delete boolean := false;
 begin
   if v_uid is null then
     raise exception 'NOT_AUTHENTICATED';
@@ -45,19 +40,8 @@ begin
   where workspace_id = p_workspace_id
     and role = 'admin';
 
-  -- Creator leaving, or last admin leaving → remove the whole workspace.
-  if v_workspace.created_by = v_uid then
-    v_should_delete := true;
-  elsif v_membership.role = 'admin' and v_admin_count <= 1 then
-    v_should_delete := true;
-  end if;
-
-  if v_should_delete then
-    delete from public.reservations where workspace_id = p_workspace_id;
-    delete from public.slots where workspace_id = p_workspace_id;
-    delete from public.workspace_members where workspace_id = p_workspace_id;
-    delete from public.workspaces where id = p_workspace_id;
-    return jsonb_build_object('deleted', true);
+  if v_membership.role = 'admin' and v_admin_count <= 1 then
+    raise exception 'LAST_ADMIN';
   end if;
 
   for v_claim in
@@ -77,5 +61,3 @@ begin
   return jsonb_build_object('deleted', false);
 end;
 $$;
-
-grant execute on function public.leave_workspace(uuid) to authenticated;
