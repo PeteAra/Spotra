@@ -183,6 +183,10 @@ export function CalendarMonthView({
               (sum, s) => sum + Math.max(s.capacity - s.claimed_count, 0),
               0,
             );
+            const allBlocked =
+              daySlots.length > 0 && daySlots.every((s) => s.capacity === 0);
+            const dayFull = daySlots.length > 0 && openSeats === 0 && !allBlocked;
+            const dayClosed = dayFull || allBlocked;
 
             return (
               <button
@@ -196,20 +200,48 @@ export function CalendarMonthView({
                     ? "border-[var(--border)] bg-[var(--surface-elevated)] hover:border-[var(--accent)]"
                     : "border-transparent opacity-30",
                   selected && "border-[var(--accent)] ring-2 ring-[var(--accent)]/30",
-                  isToday(day) && inMonth && "bg-[var(--accent-soft)]",
+                  isToday(day) && inMonth && !dayClosed && "bg-[var(--accent-soft)]",
+                  dayFull &&
+                    inMonth &&
+                    "border-[var(--danger)]/40 bg-[color-mix(in_srgb,var(--danger)_6%,var(--surface-elevated))]",
+                  allBlocked &&
+                    inMonth &&
+                    "border-[var(--border)] bg-[var(--surface-muted)]/70",
                 )}
               >
                 <div className="flex items-start justify-between">
                   <span className="text-sm font-semibold">{format(day, "d")}</span>
                   {daySlots.length > 0 && (
-                    <span className="rounded-full bg-[var(--surface-muted)] px-1.5 text-[10px] font-medium">
+                    <span
+                      className={cn(
+                        "rounded-full px-1.5 text-[10px] font-medium",
+                        dayFull
+                          ? "bg-[var(--danger)] text-white"
+                          : allBlocked
+                            ? "bg-[var(--foreground)] text-[var(--surface)]"
+                            : "bg-[var(--surface-muted)]",
+                      )}
+                    >
                       {daySlots.length}
                     </span>
                   )}
                 </div>
                 {daySlots.length > 0 && (
-                  <p className="mt-2 text-[10px] text-[var(--muted)] sm:text-xs">
-                    {openSeats > 0 ? `${openSeats} open` : "Full"}
+                  <p
+                    className={cn(
+                      "mt-2 text-[10px] sm:text-xs",
+                      dayFull
+                        ? "font-semibold text-[var(--danger)]"
+                        : allBlocked
+                          ? "font-semibold text-[var(--muted)]"
+                          : "text-[var(--muted)]",
+                    )}
+                  >
+                    {allBlocked
+                      ? "Blocked"
+                      : dayFull
+                        ? "Full"
+                        : `${openSeats} open`}
                   </p>
                 )}
               </button>

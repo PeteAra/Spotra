@@ -10,32 +10,28 @@ function AddSpotCallout({
   onClick,
   title,
   subtitle,
-  compact = false,
 }: {
   onClick: () => void;
   title: string;
   subtitle?: string;
-  compact?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-[var(--accent)]/45 bg-[var(--accent-soft)]/50 text-center transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] ${
-        compact ? "px-4 py-6" : "px-4 py-10"
-      }`}
+      className="flex w-full items-center gap-2.5 rounded-xl border border-dashed border-[var(--accent)]/45 bg-[var(--accent-soft)]/50 px-3 py-2.5 text-left transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
     >
-      <span
-        className={`flex items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-foreground)] ${
-          compact ? "h-9 w-9" : "h-11 w-11"
-        }`}
-      >
-        <Plus className={compact ? "h-4 w-4" : "h-5 w-5"} strokeWidth={2.5} />
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-foreground)]">
+        <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
       </span>
-      <span>
-        <span className="block font-medium text-[var(--foreground)]">{title}</span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium leading-tight text-[var(--foreground)]">
+          {title}
+        </span>
         {subtitle ? (
-          <span className="mt-1 block text-sm text-[var(--muted)]">{subtitle}</span>
+          <span className="mt-0.5 block text-xs leading-tight text-[var(--muted)]">
+            {subtitle}
+          </span>
         ) : null}
       </span>
     </button>
@@ -64,7 +60,7 @@ export function DayDetailPanel({
   if (!day) {
     return (
       <aside className="rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-6 text-[var(--muted)]">
-        Select a day to view or create spots.
+        Select a day to view or create time slots.
       </aside>
     );
   }
@@ -88,39 +84,39 @@ export function DayDetailPanel({
         )}
       </div>
 
-      <div className="mt-6 space-y-3">
+      <div className="mt-4 space-y-2">
+        {role === "admin" && (
+          <AddSpotCallout
+            onClick={onAddSlot}
+            title={
+              slots.length === 0
+                ? "Add the first time slot"
+                : "Add another time slot"
+            }
+            subtitle={
+              slots.length === 0
+                ? "People can claim spots in it once it’s open"
+                : undefined
+            }
+          />
+        )}
         {slots.length === 0 ? (
-          role === "admin" ? (
-            <AddSpotCallout
-              onClick={onAddSlot}
-              title="Add the first spot"
-              subtitle="Open availability for this day"
-            />
-          ) : (
-            <p className="rounded-2xl bg-[var(--surface-muted)] px-4 py-8 text-center text-sm text-[var(--muted)]">
+          role !== "admin" ? (
+            <p className="rounded-xl bg-[var(--surface-muted)] px-3 py-4 text-center text-sm text-[var(--muted)]">
               No spots available on this day.
             </p>
-          )
+          ) : null
         ) : (
-          <>
-            {slots.map((slot) => (
-              <SlotBlock
-                key={slot.id}
-                slot={slot}
-                accountId={accountId}
-                role={role}
-                onEdit={() => onEditSlot(slot)}
-                onChanged={onSlotsChanged}
-              />
-            ))}
-            {role === "admin" && (
-              <AddSpotCallout
-                onClick={onAddSlot}
-                title="Add another spot"
-                compact
-              />
-            )}
-          </>
+          slots.map((slot) => (
+            <SlotBlock
+              key={slot.id}
+              slot={slot}
+              accountId={accountId}
+              role={role}
+              onEdit={() => onEditSlot(slot)}
+              onChanged={onSlotsChanged}
+            />
+          ))
         )}
       </div>
     </aside>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SignInWithGoogleButton } from "@/features/auth/sign-in-button";
+import { SignOutButton } from "@/features/auth/sign-out-button";
 import { CreateWorkspaceModal } from "@/features/workspace/create-workspace-modal";
 import {
   clearAuthReturnCookie,
@@ -175,6 +176,7 @@ export function LandingPage() {
               >
                 Open a New Workspace
               </button>
+              <SignOutButton size="lg" />
             </>
           ) : (
             <>

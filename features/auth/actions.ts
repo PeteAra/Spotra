@@ -16,6 +16,10 @@ export async function signInWithGoogle(returnTo = "/") {
     provider: "google",
     options: {
       redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(returnTo)}`,
+      // Let users pick a different Gmail after signing out.
+      queryParams: {
+        prompt: "select_account",
+      },
     },
   });
 
@@ -26,5 +30,5 @@ export async function signInWithGoogle(returnTo = "/") {
 
 export async function signOut() {
   const supabase = createClient();
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: "global" });
 }

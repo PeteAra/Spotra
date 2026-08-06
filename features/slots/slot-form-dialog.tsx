@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { createSlot, updateSlot } from "@/features/slots/actions";
 import {
   addOneHour,
-  snapToQuarterHour,
+  snapToTimeStep,
   TimeSelect,
 } from "@/features/slots/time-select";
 import { slotColorFromTitle } from "@/lib/utils/slot-color";
@@ -63,8 +63,8 @@ export function SlotFormDialog({
       form.reset({
         title: slot.title ?? "",
         date: format(start, "yyyy-MM-dd"),
-        startTime: snapToQuarterHour(format(start, "HH:mm")),
-        endTime: snapToQuarterHour(format(end, "HH:mm")),
+        startTime: snapToTimeStep(format(start, "HH:mm")),
+        endTime: snapToTimeStep(format(end, "HH:mm")),
         capacity: slot.capacity,
       });
     } else {
@@ -82,7 +82,7 @@ export function SlotFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{slot ? "Edit spot" : "Create spot"}</DialogTitle>
+          <DialogTitle>{slot ? "Edit time slot" : "Create time slot"}</DialogTitle>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -104,7 +104,7 @@ export function SlotFormDialog({
               toast.error(result.error);
               return;
             }
-            toast.success(slot ? "Spot updated" : "Spot created");
+            toast.success(slot ? "Time slot updated" : "Time slot created");
             onOpenChange(false);
             await onSaved();
           })}
@@ -172,19 +172,19 @@ export function SlotFormDialog({
             <Input
               id="capacity"
               type="number"
-              min={1}
+              min={0}
               max={100}
               {...form.register("capacity")}
             />
             <p className="text-xs text-[var(--muted)]">
-              Default is 1. Set to 8 (or more) when multiple people can share this
-              spot.
+              Default is 1. Use 0 to block this time (no one can claim). Set
+              higher when multiple people can share the spot.
             </p>
           </div>
           <input type="hidden" {...form.register("date")} />
           <DialogFooter>
             <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? "Saving…" : "Save spot"}
+              {form.formState.isSubmitting ? "Saving…" : "Save time slot"}
             </Button>
           </DialogFooter>
         </form>

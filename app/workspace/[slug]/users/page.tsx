@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceBySlug } from "@/features/workspace/actions";
 import { MembersTable } from "@/features/members/members-table";
+import { SignOutButton } from "@/features/auth/sign-out-button";
 import { Button } from "@/components/ui/button";
 
 export default async function WorkspaceUsersPage({
@@ -40,9 +41,12 @@ export default async function WorkspaceUsersPage({
             Workspace users
           </h1>
         </div>
-        <Button variant="secondary" asChild>
-          <Link href={`/workspace/${slug}`}>Back to calendar</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" asChild>
+            <Link href={`/workspace/${slug}`}>Back to calendar</Link>
+          </Button>
+          <SignOutButton />
+        </div>
       </div>
       <MembersTable
         workspaceId={result.data.workspace.id}

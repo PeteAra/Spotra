@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { deleteWorkspace } from "@/features/workspace/actions";
+import { SignOutButton } from "@/features/auth/sign-out-button";
 import type { Workspace, WorkspaceRole } from "@/types";
 
 export function WorkspaceHeader({
@@ -99,6 +100,7 @@ export function WorkspaceHeader({
           <Link2 className="h-4 w-4" />
           Share
         </Button>
+        <SignOutButton />
       </div>
 
       <Dialog open={shareOpen} onOpenChange={setShareOpen}>

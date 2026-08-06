@@ -1,28 +1,38 @@
-/** Stable pastel palette for spot titles — same title → same color. */
+/**
+ * Stable spot-title palette — same title → same color.
+ * Avoids warm beige/tan pastels that disappear on the cream app background.
+ * Hues are spaced around the wheel so neighboring titles stay distinguishable.
+ */
 const SLOT_COLORS = [
-  { bg: "#d7efe6", border: "#1f6f5b", text: "#145044" }, // teal
-  { bg: "#e3edf8", border: "#3b6ea5", text: "#1e3a5f" }, // blue
-  { bg: "#f3e6d8", border: "#a66b3a", text: "#5c3a1e" }, // clay
-  { bg: "#ece4f5", border: "#6f4f9a", text: "#3d2a5c" }, // plum
-  { bg: "#f6e8d0", border: "#b0892d", text: "#5c4a14" }, // gold
-  { bg: "#ddece3", border: "#4a7c59", text: "#243d2c" }, // moss
-  { bg: "#f8e2e0", border: "#a8574f", text: "#5c2a26" }, // rose
-  { bg: "#e2e8f0", border: "#54728f", text: "#2a3a4a" }, // slate
+  { bg: "#c8ebe0", border: "#1f6f5b", text: "#0f3d32" }, // teal
+  { bg: "#cfe0f7", border: "#2f5f9e", text: "#1a3358" }, // blue
+  { bg: "#e4d4f5", border: "#6b3fa0", text: "#3a2060" }, // plum
+  { bg: "#f8d4dc", border: "#b03d5c", text: "#6b1f35" }, // rose
+  { bg: "#d4edc9", border: "#3f7a2e", text: "#234818" }, // green
+  { bg: "#fde2c8", border: "#c45e12", text: "#6b3208" }, // orange (clear, not tan)
+  { bg: "#d2eaf2", border: "#1f7a8c", text: "#124a54" }, // cyan
+  { bg: "#e8d9f0", border: "#8b4d9e", text: "#4a2858" }, // orchid
+  { bg: "#dce4f5", border: "#4558a0", text: "#252f58" }, // indigo
+  { bg: "#f5d6e8", border: "#a83278", text: "#5c1844" }, // magenta
+  { bg: "#dde8d4", border: "#5a7a38", text: "#2f401c" }, // olive
+  { bg: "#d8e0ea", border: "#4a6280", text: "#243548" }, // steel
 ] as const;
 
+/** Untitled spots — slightly cooler than the cream chrome so they still read as a chip. */
 const NEUTRAL = {
-  bg: "#ebe4d6",
-  border: "#a89f8c",
-  text: "#4a453c",
+  bg: "#e4e8e2",
+  border: "#7a8474",
+  text: "#3a4038",
 } as const;
 
 function hashTitle(title: string): number {
   const normalized = title.trim().toLowerCase();
-  let hash = 0;
+  let hash = 2166136261;
   for (let i = 0; i < normalized.length; i++) {
-    hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0;
+    hash ^= normalized.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
   }
-  return hash;
+  return hash >>> 0;
 }
 
 export function slotColorFromTitle(title: string | null | undefined) {

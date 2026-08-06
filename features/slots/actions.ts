@@ -64,11 +64,13 @@ function toSlotWithReservations(
   const claimed = reservations.filter((r) => r.status === "claimed");
   const claimed_count = claimed.length;
   const availability =
-    claimed_count >= slot.capacity
-      ? "full"
-      : claimed_count > 0
-        ? "partial"
-        : "available";
+    slot.capacity === 0
+      ? "blocked"
+      : claimed_count >= slot.capacity
+        ? "full"
+        : claimed_count > 0
+          ? "partial"
+          : "available";
 
   return {
     ...slot,

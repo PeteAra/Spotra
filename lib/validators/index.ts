@@ -16,7 +16,7 @@ export const slotFormSchema = z
       .string()
       .regex(/^\d{2}:\d{2}(:\d{2})?$/, "Invalid end time")
       .transform((t) => t.slice(0, 5)),
-    capacity: z.coerce.number().int().min(1).max(100),
+    capacity: z.coerce.number().int().min(0).max(100),
   })
   .refine((data) => data.endTime > data.startTime, {
     message: "End time must be after start time",

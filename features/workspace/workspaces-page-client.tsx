@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { LayoutGrid, Plus, Trash2 } from "lucide-react";
@@ -22,10 +21,9 @@ import {
   leaveWorkspace,
   listMyWorkspaces,
 } from "@/features/workspace/actions";
-import { signOut } from "@/features/auth/actions";
+import { SignOutButton } from "@/features/auth/sign-out-button";
 
 export function WorkspacesPageClient() {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{
@@ -69,16 +67,7 @@ export function WorkspacesPageClient() {
           <Button variant="secondary" asChild>
             <Link href="/">Home</Link>
           </Button>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              await signOut();
-              router.push("/");
-              router.refresh();
-            }}
-          >
-            Sign out
-          </Button>
+          <SignOutButton />
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />
             New workspace

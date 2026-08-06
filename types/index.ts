@@ -1,6 +1,6 @@
 export type WorkspaceRole = "admin" | "participant";
 export type ReservationStatus = "claimed" | "cancelled";
-export type SlotAvailability = "available" | "partial" | "full";
+export type SlotAvailability = "available" | "partial" | "full" | "blocked";
 
 export type Account = {
   id: string;
