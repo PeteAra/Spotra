@@ -21,8 +21,14 @@ import {
   snapToTimeStep,
   TimeSelect,
 } from "@/features/slots/time-select";
-import { slotColorFromTitle } from "@/lib/utils/slot-color";
+import {
+  isSlotColorKey,
+  resolveSlotColor,
+  SLOT_COLOR_OPTIONS,
+  type SlotColorKey,
+} from "@/lib/utils/slot-color";
 import { getClientTimeZoneOffsetMinutes } from "@/lib/utils/dates";
+import { cn } from "@/lib/utils/cn";
 import { slotFormSchema, type SlotFormInput } from "@/lib/validators";
 import type { SlotWithReservations } from "@/types";
 
@@ -49,11 +55,14 @@ export function SlotFormDialog({
       startTime: "09:00",
       endTime: "09:30",
       capacity: 1,
+      colorKey: null,
     },
   });
 
   const watchedTitle = form.watch("title");
-  const previewColor = slotColorFromTitle(watchedTitle);
+  const watchedColorKey = form.watch("colorKey");
+  const previewColor = resolveSlotColor(watchedTitle, watchedColorKey ?? null);
+  const isAutoColor = !watchedColorKey;
 
   useEffect(() => {
     if (!open) return;
@@ -66,6 +75,7 @@ export function SlotFormDialog({
         startTime: snapToTimeStep(format(start, "HH:mm")),
         endTime: snapToTimeStep(format(end, "HH:mm")),
         capacity: slot.capacity,
+        colorKey: isSlotColorKey(slot.color_key) ? slot.color_key : null,
       });
     } else {
       form.reset({
@@ -74,9 +84,14 @@ export function SlotFormDialog({
         startTime: "09:00",
         endTime: "09:30",
         capacity: 1,
+        colorKey: null,
       });
     }
   }, [open, slot, day, form]);
+
+  function setColor(key: SlotColorKey | null) {
+    form.setValue("colorKey", key, { shouldDirty: true, shouldValidate: true });
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -117,6 +132,60 @@ export function SlotFormDialog({
               maxLength={80}
               {...form.register("title")}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Color</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setColor(null)}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition",
+                  isAutoColor
+                    ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--foreground)] ring-2 ring-[var(--accent)]/30"
+                    : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--accent)]/50",
+                )}
+                title="Assign color from the title"
+              >
+                <span
+                  className="h-3.5 w-3.5 rounded-full border"
+                  style={{
+                    backgroundColor: resolveSlotColor(watchedTitle, null).bg,
+                    borderColor: resolveSlotColor(watchedTitle, null).border,
+                  }}
+                  aria-hidden
+                />
+                Auto
+              </button>
+              {SLOT_COLOR_OPTIONS.map((color) => {
+                const selected = watchedColorKey === color.key;
+                return (
+                  <button
+                    key={color.key}
+                    type="button"
+                    aria-label={color.label}
+                    title={color.label}
+                    onClick={() => setColor(color.key)}
+                    className={cn(
+                      "h-8 w-8 rounded-full border-2 transition",
+                      selected
+                        ? "scale-110 ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)]"
+                        : "hover:scale-105",
+                    )}
+                    style={{
+                      backgroundColor: color.bg,
+                      borderColor: color.border,
+                    }}
+                  />
+                );
+              })}
+            </div>
+            <p className="text-xs text-[var(--muted)]">
+              {isAutoColor
+                ? "Auto picks a color from the title. Tap a swatch to lock one in for every time slot with this title."
+                : `Using ${SLOT_COLOR_OPTIONS.find((c) => c.key === watchedColorKey)?.label ?? "custom"} for all time slots with this title — tap Auto to unlock.`}
+            </p>
             <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
               <span
                 className="inline-block h-3 w-3 rounded-full border"
@@ -126,10 +195,10 @@ export function SlotFormDialog({
                 }}
                 aria-hidden
               />
-              Color is assigned from the title — same name always gets the same
-              color.
+              Preview
             </div>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="startTime">Start</Label>

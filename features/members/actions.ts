@@ -266,6 +266,27 @@ export async function removeMember(input: {
     };
   }
 
+  // Free any active claims so the calendar isn't left with ghost seats.
+  const { data: activeClaims } = await admin.supabase
+    .from("reservations")
+    .select("id")
+    .eq("workspace_id", input.workspaceId)
+    .eq("account_id", input.accountId)
+    .eq("status", "claimed");
+
+  for (const claim of activeClaims ?? []) {
+    const { error: cancelError } = await admin.supabase.rpc(
+      "cancel_reservation",
+      {
+        p_reservation_id: claim.id,
+        p_reason: "Removed from workspace by an admin.",
+      },
+    );
+    if (cancelError) {
+      return { ok: false, error: cancelError.message };
+    }
+  }
+
   const { error } = await admin.supabase
     .from("workspace_members")
     .delete()

@@ -8,7 +8,7 @@ import { SlotClaimToast } from "@/features/reservations/slot-claim-toast";
 import { SlotCancelToast } from "@/features/reservations/slot-cancel-toast";
 import { deleteSlot } from "@/features/slots/actions";
 import { formatTimeRange } from "@/lib/utils/dates";
-import { slotColorFromTitle } from "@/lib/utils/slot-color";
+import { resolveSlotColor } from "@/lib/utils/slot-color";
 import { cn } from "@/lib/utils/cn";
 import type { Reservation, SlotWithReservations, WorkspaceRole } from "@/types";
 
@@ -38,7 +38,7 @@ export function SlotBlock({
   const isBlocked = slot.availability === "blocked";
   const isClosed = isFull || isBlocked;
   const canClaim = !ownReservation && !isClosed;
-  const palette = slotColorFromTitle(slot.title);
+  const palette = resolveSlotColor(slot.title, slot.color_key);
   const title = slot.title?.trim();
 
   return (

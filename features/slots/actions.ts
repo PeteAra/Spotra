@@ -152,6 +152,53 @@ export async function getSlotsForMonth(input: {
   };
 }
 
+function slotWriteErrorMessage(message: string): string {
+  if (message.includes("slots_capacity_range")) {
+    return "Blocked time (capacity 0) isn’t enabled on the database yet. Run the latest Supabase migration, then try again.";
+  }
+  if (message.includes("slots_time_order")) {
+    return "End time must be after start time.";
+  }
+  if (message.includes("slots_title_length")) {
+    return "Title must be 80 characters or fewer.";
+  }
+  return message;
+}
+
+/** Apply a color choice to every time slot in the workspace with the same title. */
+async function syncColorForTitle(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workspaceId: string,
+  title: string,
+  colorKey: string | null,
+) {
+  const normalized = title.trim().toLowerCase();
+  if (!normalized) return;
+
+  const { data: siblings, error: listError } = await supabase
+    .from("slots")
+    .select("id, title")
+    .eq("workspace_id", workspaceId);
+
+  if (listError) throw new Error(listError.message);
+
+  const ids = (siblings ?? [])
+    .filter((s) => (s.title ?? "").trim().toLowerCase() === normalized)
+    .map((s) => s.id);
+
+  if (ids.length === 0) return;
+
+  const { error } = await supabase
+    .from("slots")
+    .update({
+      color_key: colorKey,
+      updated_at: new Date().toISOString(),
+    })
+    .in("id", ids);
+
+  if (error) throw new Error(error.message);
+}
+
 export async function createSlot(input: {
   workspaceId: string;
   title?: string;
@@ -159,6 +206,7 @@ export async function createSlot(input: {
   startTime: string;
   endTime: string;
   capacity: number;
+  colorKey?: string | null;
   timeZoneOffsetMinutes: number;
 }): Promise<ActionResult<Slot>> {
   const parsed = slotFormSchema.safeParse(input);
@@ -185,6 +233,7 @@ export async function createSlot(input: {
     .insert({
       workspace_id: input.workspaceId,
       title: parsed.data.title,
+      color_key: parsed.data.colorKey ?? null,
       starts_at: startsAt.toISOString(),
       ends_at: endsAt.toISOString(),
       capacity: parsed.data.capacity,
@@ -193,8 +242,54 @@ export async function createSlot(input: {
     .select("*")
     .single();
 
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, data: data as Slot };
+  if (error) return { ok: false, error: slotWriteErrorMessage(error.message) };
+
+  const title = parsed.data.title;
+  const colorKey = parsed.data.colorKey ?? null;
+
+  try {
+    if (colorKey !== null) {
+      // Lock this color onto every same-titled time slot.
+      await syncColorForTitle(admin.supabase, input.workspaceId, title, colorKey);
+    } else if (title.trim()) {
+      // Auto: inherit a locked color from an existing same-title slot, if any.
+      const { data: siblings } = await admin.supabase
+        .from("slots")
+        .select("id, title, color_key")
+        .eq("workspace_id", input.workspaceId);
+
+      const normalized = title.trim().toLowerCase();
+      const locked = (siblings ?? []).find(
+        (s) =>
+          s.id !== data.id &&
+          (s.title ?? "").trim().toLowerCase() === normalized &&
+          s.color_key,
+      );
+
+      if (locked?.color_key) {
+        await admin.supabase
+          .from("slots")
+          .update({
+            color_key: locked.color_key,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", data.id);
+      }
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not sync title colors.",
+    };
+  }
+
+  const { data: fresh } = await admin.supabase
+    .from("slots")
+    .select("*")
+    .eq("id", data.id)
+    .single();
+
+  return { ok: true, data: (fresh ?? data) as Slot };
 }
 
 export async function updateSlot(input: {
@@ -205,6 +300,7 @@ export async function updateSlot(input: {
   startTime: string;
   endTime: string;
   capacity: number;
+  colorKey?: string | null;
   timeZoneOffsetMinutes: number;
 }): Promise<ActionResult<Slot>> {
   const parsed = slotFormSchema.safeParse(input);
@@ -243,6 +339,7 @@ export async function updateSlot(input: {
     .from("slots")
     .update({
       title: parsed.data.title,
+      color_key: parsed.data.colorKey ?? null,
       starts_at: startsAt.toISOString(),
       ends_at: endsAt.toISOString(),
       capacity: parsed.data.capacity,
@@ -252,8 +349,29 @@ export async function updateSlot(input: {
     .select("*")
     .single();
 
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, data: data as Slot };
+  if (error) return { ok: false, error: slotWriteErrorMessage(error.message) };
+
+  try {
+    await syncColorForTitle(
+      admin.supabase,
+      input.workspaceId,
+      parsed.data.title,
+      parsed.data.colorKey ?? null,
+    );
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not sync title colors.",
+    };
+  }
+
+  const { data: fresh } = await admin.supabase
+    .from("slots")
+    .select("*")
+    .eq("id", input.slotId)
+    .single();
+
+  return { ok: true, data: (fresh ?? data) as Slot };
 }
 
 export async function deleteSlot(input: {
@@ -263,17 +381,30 @@ export async function deleteSlot(input: {
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
 
-  const { count } = await admin.supabase
+  const { count: activeClaims, error: countError } = await admin.supabase
     .from("reservations")
     .select("*", { count: "exact", head: true })
-    .eq("slot_id", input.slotId);
+    .eq("slot_id", input.slotId)
+    .eq("status", "claimed");
 
-  if ((count ?? 0) > 0) {
+  if (countError) return { ok: false, error: countError.message };
+
+  if ((activeClaims ?? 0) > 0) {
     return {
       ok: false,
-      error: "This spot has claim history and cannot be deleted. Cancel claims first.",
+      error:
+        "This time slot still has active claims. Cancel or remove them first, then delete.",
     };
   }
+
+  // Cancelled claim rows keep a FK to the slot (ON DELETE RESTRICT), so clear
+  // history for this slot before deleting the container.
+  const { error: historyError } = await admin.supabase
+    .from("reservations")
+    .delete()
+    .eq("slot_id", input.slotId);
+
+  if (historyError) return { ok: false, error: historyError.message };
 
   const { error } = await admin.supabase
     .from("slots")
@@ -311,6 +442,7 @@ async function copySlotsToDates(
       return {
         workspace_id: slot.workspace_id,
         title: slot.title ?? "",
+        color_key: slot.color_key ?? null,
         starts_at: startsAt.toISOString(),
         ends_at: endsAt.toISOString(),
         capacity: slot.capacity,
@@ -467,6 +599,7 @@ export async function duplicatePreviousMonth(input: {
     const rows: Array<{
       workspace_id: string;
       title: string;
+      color_key: string | null;
       starts_at: string;
       ends_at: string;
       capacity: number;
@@ -504,6 +637,7 @@ export async function duplicatePreviousMonth(input: {
       rows.push({
         workspace_id: input.workspaceId,
         title: slot.title ?? "",
+        color_key: slot.color_key ?? null,
         starts_at: startsAt.toISOString(),
         ends_at: endsAt.toISOString(),
         capacity: slot.capacity,
@@ -557,12 +691,23 @@ export async function deleteSlotsInMonth(input: {
   let skipped = 0;
 
   for (const slot of slots ?? []) {
-    const { count } = await admin.supabase
+    const { count: activeClaims, error: countError } = await admin.supabase
       .from("reservations")
       .select("*", { count: "exact", head: true })
+      .eq("slot_id", slot.id)
+      .eq("status", "claimed");
+
+    if (countError || (activeClaims ?? 0) > 0) {
+      skipped += 1;
+      continue;
+    }
+
+    const { error: historyError } = await admin.supabase
+      .from("reservations")
+      .delete()
       .eq("slot_id", slot.id);
 
-    if ((count ?? 0) > 0) {
+    if (historyError) {
       skipped += 1;
       continue;
     }

@@ -1,4 +1,10 @@
 import { z } from "zod";
+import { SLOT_COLOR_OPTIONS } from "@/lib/utils/slot-color";
+
+const slotColorKeys = SLOT_COLOR_OPTIONS.map((c) => c.key) as [
+  (typeof SLOT_COLOR_OPTIONS)[number]["key"],
+  ...(typeof SLOT_COLOR_OPTIONS)[number]["key"][],
+];
 
 export const workspaceTitleSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(120),
@@ -17,6 +23,7 @@ export const slotFormSchema = z
       .regex(/^\d{2}:\d{2}(:\d{2})?$/, "Invalid end time")
       .transform((t) => t.slice(0, 5)),
     capacity: z.coerce.number().int().min(0).max(100),
+    colorKey: z.enum(slotColorKeys).nullable().optional(),
   })
   .refine((data) => data.endTime > data.startTime, {
     message: "End time must be after start time",

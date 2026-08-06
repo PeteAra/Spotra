@@ -64,6 +64,7 @@ export type Slot = {
   id: string;
   workspace_id: string;
   title: string;
+  color_key: string | null;
   starts_at: string;
   ends_at: string;
   capacity: number;

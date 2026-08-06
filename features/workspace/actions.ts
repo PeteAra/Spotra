@@ -306,6 +306,24 @@ export async function leaveWorkspace(
     }
   }
 
+  // Cancel active claims so seats open back up for others.
+  const { data: activeClaims } = await supabase
+    .from("reservations")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("account_id", accountId)
+    .eq("status", "claimed");
+
+  for (const claim of activeClaims ?? []) {
+    const { error: cancelError } = await supabase.rpc("cancel_reservation", {
+      p_reservation_id: claim.id,
+      p_reason: "Left the workspace.",
+    });
+    if (cancelError) {
+      return { ok: false, error: cancelError.message };
+    }
+  }
+
   const { error } = await supabase
     .from("workspace_members")
     .delete()
