@@ -281,68 +281,34 @@ export async function deleteWorkspace(
 
 export async function leaveWorkspace(
   workspaceId: string,
-): Promise<ActionResult> {
+): Promise<ActionResult<{ deleted: boolean }>> {
   const { supabase, user, accountId } = await ensureAccount();
   if (!user || !accountId) {
     return { ok: false, error: "Please sign in." };
   }
 
-  const { data: membership } = await supabase
-    .from("workspace_members")
-    .select("role")
-    .eq("workspace_id", workspaceId)
-    .eq("account_id", accountId)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("leave_workspace", {
+    p_workspace_id: workspaceId,
+  });
 
-  if (!membership) {
-    return { ok: false, error: "You are not a member of this workspace." };
+  if (error) {
+    return { ok: false, error: mapRpcError(error.message) };
   }
 
-  if (membership.role === "admin") {
-    const { count } = await supabase
-      .from("workspace_members")
-      .select("*", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId)
-      .eq("role", "admin");
+  const deleted =
+    data &&
+    typeof data === "object" &&
+    "deleted" in data &&
+    Boolean((data as { deleted?: boolean }).deleted);
 
-    if ((count ?? 0) <= 1) {
-      return {
-        ok: false,
-        error: "You're the only admin. Delete the workspace instead, or add another admin first.",
-      };
-    }
-  }
-
-  // Cancel active claims so seats open back up for others.
-  const { data: activeClaims } = await supabase
-    .from("reservations")
-    .select("id")
-    .eq("workspace_id", workspaceId)
-    .eq("account_id", accountId)
-    .eq("status", "claimed");
-
-  for (const claim of activeClaims ?? []) {
-    const { error: cancelError } = await supabase.rpc("cancel_reservation", {
-      p_reservation_id: claim.id,
-      p_reason: "Left the workspace.",
-    });
-    if (cancelError) {
-      return { ok: false, error: cancelError.message };
-    }
-  }
-
-  const { error } = await supabase
-    .from("workspace_members")
-    .delete()
-    .eq("workspace_id", workspaceId)
-    .eq("account_id", accountId);
-
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, data: undefined };
+  return { ok: true, data: { deleted } };
 }
 
 function mapRpcError(message: string): string {
   if (message.includes("WORKSPACE_NOT_FOUND")) return "Workspace not found.";
   if (message.includes("NOT_AUTHENTICATED")) return "Please sign in.";
+  if (message.includes("NOT_A_MEMBER")) {
+    return "You are not a member of this workspace.";
+  }
   return message;
 }

@@ -144,7 +144,11 @@ export function WorkspacesPageClient() {
                       toast.error(result.error);
                       return;
                     }
-                    toast.success("Left workspace");
+                    toast.success(
+                      result.data.deleted
+                        ? "Workspace deleted"
+                        : "Left workspace",
+                    );
                     await refresh();
                   }}
                 >
