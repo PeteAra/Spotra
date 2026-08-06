@@ -29,8 +29,8 @@ export function DuplicatePreviousMonthPrompt({
         <DialogHeader>
           <DialogTitle>Duplicate previous month?</DialogTitle>
           <DialogDescription>
-            Copy last month&apos;s spot pattern into {targetLabel}. Times that
-            already overlap an existing slot will be skipped.
+            Copy last month&apos;s spot pattern into {targetLabel}. Slots with
+            the same title at an overlapping time are skipped.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

@@ -11,6 +11,7 @@ export const slotRepeatRules = [
   "daily",
   "weekly",
   "weekdays",
+  "weekends",
 ] as const;
 
 export const workspaceTitleSchema = z.object({

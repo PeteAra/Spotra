@@ -2,10 +2,7 @@
 
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-  duplicateSameWeekdayInMonth,
-  duplicateWeekdaysInMonth,
-} from "@/features/slots/actions";
+import { duplicateSameWeekdayInMonth } from "@/features/slots/actions";
 import { getClientTimeZoneOffsetMinutes } from "@/lib/utils/dates";
 
 export function DuplicateDayMenu({
@@ -37,7 +34,7 @@ export function DuplicateDayMenu({
           toast.success(
             `Duplicated to all ${weekdayLabel}s (${result.data.created} spots` +
               (result.data.skipped
-                ? `, ${result.data.skipped} skipped — overlapping`
+                ? `, ${result.data.skipped} skipped — same title overlap`
                 : "") +
               ")",
           );
@@ -45,31 +42,6 @@ export function DuplicateDayMenu({
         }}
       >
         All {weekdayLabel}s
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={async () => {
-          const result = await duplicateWeekdaysInMonth({
-            workspaceId,
-            sourceDate,
-            timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
-          });
-          if (!result.ok) {
-            toast.error(result.error);
-            return;
-          }
-          toast.success(
-            `Duplicated to weekdays (${result.data.created} spots` +
-              (result.data.skipped
-                ? `, ${result.data.skipped} skipped — overlapping`
-                : "") +
-              ")",
-          );
-          onDone();
-        }}
-      >
-        All weekdays
       </Button>
     </div>
   );

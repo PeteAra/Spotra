@@ -14,7 +14,6 @@ import {
   sameWeekdayDatesInMonth,
   utcToWallParts,
   wallDateTimeToUtc,
-  weekdayDatesInMonth,
 } from "@/lib/utils/dates";
 import { slotFormSchema } from "@/lib/validators";
 import type {
@@ -166,7 +165,11 @@ function slotWriteErrorMessage(message: string): string {
   return message;
 }
 
-type SlotInterval = { starts_at: string; ends_at: string };
+type SlotInterval = { starts_at: string; ends_at: string; title?: string | null };
+
+function normalizeSlotTitle(title: string | null | undefined): string {
+  return (title ?? "").trim().toLowerCase();
+}
 
 function intervalsOverlap(a: SlotInterval, b: SlotInterval): boolean {
   return (
@@ -175,8 +178,16 @@ function intervalsOverlap(a: SlotInterval, b: SlotInterval): boolean {
   );
 }
 
-/** Keep candidates that do not overlap existing slots or earlier accepted candidates. */
-function filterNonOverlappingSlots<T extends SlotInterval>(
+/** Same title + overlapping time = duplicate; different titles may share a time. */
+function isDuplicateTitleSlot(a: SlotInterval, b: SlotInterval): boolean {
+  return (
+    normalizeSlotTitle(a.title) === normalizeSlotTitle(b.title) &&
+    intervalsOverlap(a, b)
+  );
+}
+
+/** Keep candidates that are not same-title overlaps of existing or earlier kept rows. */
+function filterNonDuplicateTitleSlots<T extends SlotInterval>(
   candidates: T[],
   existing: SlotInterval[],
 ): { kept: T[]; skipped: number } {
@@ -185,7 +196,7 @@ function filterNonOverlappingSlots<T extends SlotInterval>(
   let skipped = 0;
 
   for (const candidate of candidates) {
-    if (occupied.some((slot) => intervalsOverlap(slot, candidate))) {
+    if (occupied.some((slot) => isDuplicateTitleSlot(slot, candidate))) {
       skipped += 1;
       continue;
     }
@@ -196,7 +207,7 @@ function filterNonOverlappingSlots<T extends SlotInterval>(
   return { kept, skipped };
 }
 
-async function getOverlappingSlotsInRange(
+async function getSlotsInTimeRange(
   supabase: Awaited<ReturnType<typeof createClient>>,
   workspaceId: string,
   rangeStartIso: string,
@@ -205,7 +216,7 @@ async function getOverlappingSlotsInRange(
 ): Promise<SlotInterval[]> {
   let query = supabase
     .from("slots")
-    .select("id, starts_at, ends_at")
+    .select("id, title, starts_at, ends_at")
     .eq("workspace_id", workspaceId)
     .lt("starts_at", rangeEndIso)
     .gt("ends_at", rangeStartIso);
@@ -217,6 +228,7 @@ async function getOverlappingSlotsInRange(
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => ({
+    title: row.title,
     starts_at: row.starts_at,
     ends_at: row.ends_at,
   }));
@@ -264,7 +276,7 @@ export async function createSlot(input: {
   endTime: string;
   capacity: number;
   colorKey?: string | null;
-  repeat?: "none" | "daily" | "weekly" | "weekdays";
+  repeat?: "none" | "daily" | "weekly" | "weekdays" | "weekends";
   timeZoneOffsetMinutes: number;
 }): Promise<ActionResult<{ created: number; skipped: number; slot: Slot }>> {
   const parsed = slotFormSchema.safeParse(input);
@@ -313,7 +325,7 @@ export async function createSlot(input: {
 
   let existing: SlotInterval[];
   try {
-    existing = await getOverlappingSlotsInRange(
+    existing = await getSlotsInTimeRange(
       admin.supabase,
       input.workspaceId,
       rangeStart,
@@ -326,15 +338,15 @@ export async function createSlot(input: {
     };
   }
 
-  const { kept: rows, skipped } = filterNonOverlappingSlots(candidates, existing);
+  const { kept: rows, skipped } = filterNonDuplicateTitleSlots(candidates, existing);
 
   if (rows.length === 0) {
     return {
       ok: false,
       error:
         skipped > 1
-          ? "All of those times overlap existing time slots."
-          : "That time overlaps an existing time slot.",
+          ? "All of those already exist with the same title and overlapping times."
+          : "A time slot with this title already exists at that time.",
     };
   }
 
@@ -414,7 +426,7 @@ export async function updateSlot(input: {
   endTime: string;
   capacity: number;
   colorKey?: string | null;
-  repeat?: "none" | "daily" | "weekly" | "weekdays";
+  repeat?: "none" | "daily" | "weekly" | "weekdays" | "weekends";
   timeZoneOffsetMinutes: number;
 }): Promise<
   ActionResult<{ slot: Slot; createdAdditional: number; skipped: number }>
@@ -452,7 +464,7 @@ export async function updateSlot(input: {
   );
 
   try {
-    const existing = await getOverlappingSlotsInRange(
+    const existing = await getSlotsInTimeRange(
       admin.supabase,
       input.workspaceId,
       startsAt.toISOString(),
@@ -461,7 +473,8 @@ export async function updateSlot(input: {
     );
     if (
       existing.some((slot) =>
-        intervalsOverlap(slot, {
+        isDuplicateTitleSlot(slot, {
+          title: parsed.data.title,
           starts_at: startsAt.toISOString(),
           ends_at: endsAt.toISOString(),
         }),
@@ -469,7 +482,7 @@ export async function updateSlot(input: {
     ) {
       return {
         ok: false,
-        error: "That time overlaps an existing time slot.",
+        error: "A time slot with this title already exists at that time.",
       };
     }
   } catch (e) {
@@ -551,13 +564,13 @@ export async function updateSlot(input: {
       );
 
       try {
-        const existingExtras = await getOverlappingSlotsInRange(
+        const existingExtras = await getSlotsInTimeRange(
           admin.supabase,
           input.workspaceId,
           rangeStart,
           rangeEnd,
         );
-        const { kept: rows, skipped: skippedExtras } = filterNonOverlappingSlots(
+        const { kept: rows, skipped: skippedExtras } = filterNonDuplicateTitleSlots(
           candidates,
           existingExtras,
         );
@@ -689,13 +702,13 @@ async function copySlotsToDates(
     candidates[0]!.ends_at,
   );
 
-  const existing = await getOverlappingSlotsInRange(
+  const existing = await getSlotsInTimeRange(
     supabase,
     workspaceId,
     rangeStart,
     rangeEnd,
   );
-  const { kept: rows, skipped } = filterNonOverlappingSlots(candidates, existing);
+  const { kept: rows, skipped } = filterNonDuplicateTitleSlots(candidates, existing);
 
   if (rows.length === 0) {
     return { created: 0, skipped };
@@ -747,40 +760,6 @@ export async function duplicateSameWeekdayInMonth(input: {
     }
 
     const targets = sameWeekdayDatesInMonth(source, source).map(ymd);
-    const result = await copySlotsToDates(
-      admin.supabase,
-      admin.user!.id,
-      slots,
-      targets,
-      input.timeZoneOffsetMinutes,
-    );
-    return { ok: true, data: result };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Duplicate failed" };
-  }
-}
-
-export async function duplicateWeekdaysInMonth(input: {
-  workspaceId: string;
-  sourceDate: string;
-  timeZoneOffsetMinutes: number;
-}): Promise<ActionResult<{ created: number; skipped: number }>> {
-  const admin = await requireAdmin(input.workspaceId);
-  if (!admin.ok) return { ok: false, error: admin.error };
-
-  try {
-    const source = calendarDateAtNoonUtc(input.sourceDate);
-    const slots = await getSlotsForDay(
-      admin.supabase,
-      input.workspaceId,
-      input.sourceDate,
-      input.timeZoneOffsetMinutes,
-    );
-    if (slots.length === 0) {
-      return { ok: false, error: "No spots on this day to duplicate." };
-    }
-
-    const targets = weekdayDatesInMonth(source, source).map(ymd);
     const result = await copySlotsToDates(
       admin.supabase,
       admin.user!.id,
@@ -885,13 +864,13 @@ export async function duplicatePreviousMonth(input: {
       candidates[0]!.ends_at,
     );
 
-    const existing = await getOverlappingSlotsInRange(
+    const existing = await getSlotsInTimeRange(
       admin.supabase,
       input.workspaceId,
       rangeStart,
       rangeEnd,
     );
-    const { kept: rows, skipped: skippedOverlaps } = filterNonOverlappingSlots(
+    const { kept: rows, skipped: skippedOverlaps } = filterNonDuplicateTitleSlots(
       candidates,
       existing,
     );

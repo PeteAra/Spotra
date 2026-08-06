@@ -193,7 +193,12 @@ export function calendarDateAtNoonUtc(date: string): Date {
   return new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
 }
 
-export type SlotRepeatRule = "none" | "daily" | "weekly" | "weekdays";
+export type SlotRepeatRule =
+  | "none"
+  | "daily"
+  | "weekly"
+  | "weekdays"
+  | "weekends";
 
 /**
  * Expand a start date into occurrence dates through the end of that month.
@@ -219,7 +224,8 @@ export function expandRepeatDates(
     const include =
       repeat === "daily" ||
       (repeat === "weekly" && dow === weekday) ||
-      (repeat === "weekdays" && dow >= 1 && dow <= 5);
+      (repeat === "weekdays" && dow >= 1 && dow <= 5) ||
+      (repeat === "weekends" && (dow === 0 || dow === 6));
 
     if (include) {
       dates.push(

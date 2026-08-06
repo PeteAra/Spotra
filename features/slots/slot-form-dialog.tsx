@@ -85,6 +85,7 @@ export function SlotFormDialog({
       { value: "daily" as const, label: "Daily" },
       { value: "weekly" as const, label: `Weekly on ${weekdayLabel}` },
       { value: "weekdays" as const, label: "Every weekday (Monday–Friday)" },
+      { value: "weekends" as const, label: "Every weekend day (Saturday–Sunday)" },
     ],
     [weekdayLabel],
   );
@@ -149,12 +150,12 @@ export function SlotFormDialog({
                 toast.success(
                   `Updated slot and created ${result.data.createdAdditional} more` +
                     (result.data.skipped
-                      ? ` (${result.data.skipped} skipped — overlapping times)`
+                      ? ` (${result.data.skipped} skipped — same title at overlapping times)`
                       : ""),
                 );
               } else if (result.data.skipped > 0) {
                 toast.success(
-                  `Time slot updated (${result.data.skipped} overlapping times skipped)`,
+                  `Time slot updated (${result.data.skipped} same-title overlaps skipped)`,
                 );
               } else {
                 toast.success("Time slot updated");
@@ -173,10 +174,10 @@ export function SlotFormDialog({
                 result.data.created > 1
                   ? `Created ${result.data.created} time slots` +
                       (result.data.skipped
-                        ? ` (${result.data.skipped} skipped — overlapping times)`
+                        ? ` (${result.data.skipped} skipped — same title at overlapping times)`
                         : "")
                   : result.data.skipped
-                    ? "Time slot created (some overlapping times were skipped)"
+                    ? "Time slot created (some same-title overlaps were skipped)"
                     : "Time slot created",
               );
             }
@@ -326,7 +327,7 @@ export function SlotFormDialog({
             <p className="text-xs text-[var(--muted)]">
               {watchedRepeat && watchedRepeat !== "none"
                 ? slot
-                  ? `Updates this slot and creates ${repeatCount - 1} more through the end of ${monthLabel}. Overlapping times are skipped.`
+                  ? `Updates this slot and creates ${repeatCount - 1} more through the end of ${monthLabel}. Same title at overlapping times is skipped.`
                   : `Creates ${repeatCount} time slot${repeatCount === 1 ? "" : "s"} through the end of ${monthLabel}.`
                 : slot
                   ? "Only updates this one time slot."

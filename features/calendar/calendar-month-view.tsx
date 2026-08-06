@@ -295,7 +295,7 @@ export function CalendarMonthView({
             toast.success(
               `Created ${result.data.created} spots` +
                 (result.data.skipped
-                  ? ` (${result.data.skipped} skipped — overlapping times)`
+                  ? ` (${result.data.skipped} skipped — same title at overlapping times)`
                   : ""),
             );
           }

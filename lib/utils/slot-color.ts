@@ -1,19 +1,19 @@
 /**
- * Named palette for time slots.
- * Hues are spaced farther apart, with stronger borders, so chips stay
- * distinct on the cream app background.
+ * Named pastel palette for time slots.
+ * Soft fills with readable borders — quiet enough as defaults, still
+ * distinguishable when someone picks a color by hand.
  */
 export const SLOT_COLOR_OPTIONS = [
-  { key: "teal", label: "Teal", bg: "#9fdfc9", border: "#0f5c48", text: "#0a3328" },
-  { key: "blue", label: "Blue", bg: "#9ec5f5", border: "#1a4f96", text: "#122c54" },
-  { key: "violet", label: "Violet", bg: "#c9b0f0", border: "#5b2d9e", text: "#2f1658" },
-  { key: "magenta", label: "Magenta", bg: "#f0a8d0", border: "#a01f6c", text: "#5a103c" },
-  { key: "red", label: "Red", bg: "#f5a8a0", border: "#b02820", text: "#641410" },
-  { key: "orange", label: "Orange", bg: "#ffc089", border: "#c24a00", text: "#6b2800" },
-  { key: "yellow", label: "Yellow", bg: "#f5e08a", border: "#a07800", text: "#534000" },
-  { key: "green", label: "Green", bg: "#a8e090", border: "#2f7a18", text: "#184010" },
-  { key: "cyan", label: "Cyan", bg: "#8fdeef", border: "#0f6f84", text: "#0a3d4a" },
-  { key: "navy", label: "Navy", bg: "#a8b8e0", border: "#2a3f7a", text: "#182244" },
+  { key: "teal", label: "Teal", bg: "#c8ebe0", border: "#1f6f5b", text: "#0f3d32" },
+  { key: "blue", label: "Blue", bg: "#cfe0f7", border: "#2f5f9e", text: "#1a3358" },
+  { key: "violet", label: "Violet", bg: "#e4d4f5", border: "#6b3fa0", text: "#3a2060" },
+  { key: "magenta", label: "Magenta", bg: "#f5d6e8", border: "#a83278", text: "#5c1844" },
+  { key: "red", label: "Red", bg: "#f8d4dc", border: "#b03d5c", text: "#6b1f35" },
+  { key: "orange", label: "Orange", bg: "#fde2c8", border: "#c45e12", text: "#6b3208" },
+  { key: "yellow", label: "Yellow", bg: "#f6e8d0", border: "#b0892d", text: "#5c4a14" },
+  { key: "green", label: "Green", bg: "#d4edc9", border: "#3f7a2e", text: "#234818" },
+  { key: "cyan", label: "Cyan", bg: "#d2eaf2", border: "#1f7a8c", text: "#124a54" },
+  { key: "navy", label: "Navy", bg: "#dce4f5", border: "#4558a0", text: "#252f58" },
 ] as const;
 
 export type SlotColorKey = (typeof SLOT_COLOR_OPTIONS)[number]["key"];
@@ -27,9 +27,9 @@ export type SlotColor = {
 
 /** Untitled / unset — cooler gray-green so it doesn’t match cream chrome. */
 export const SLOT_COLOR_NEUTRAL: SlotColor = {
-  bg: "#dce2dc",
-  border: "#5c665c",
-  text: "#2c322c",
+  bg: "#e4e8e2",
+  border: "#7a8474",
+  text: "#3a4038",
 };
 
 const COLOR_BY_KEY = Object.fromEntries(
