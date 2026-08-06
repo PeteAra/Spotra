@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   calendarDateAtNoonUtc,
   dayBoundsUtc,
+  expandRepeatDates,
   mapDateToMonthByWeekdayOccurrence,
   monthBoundsUtc,
   monthKey,
@@ -165,6 +166,62 @@ function slotWriteErrorMessage(message: string): string {
   return message;
 }
 
+type SlotInterval = { starts_at: string; ends_at: string };
+
+function intervalsOverlap(a: SlotInterval, b: SlotInterval): boolean {
+  return (
+    new Date(a.starts_at).getTime() < new Date(b.ends_at).getTime() &&
+    new Date(b.starts_at).getTime() < new Date(a.ends_at).getTime()
+  );
+}
+
+/** Keep candidates that do not overlap existing slots or earlier accepted candidates. */
+function filterNonOverlappingSlots<T extends SlotInterval>(
+  candidates: T[],
+  existing: SlotInterval[],
+): { kept: T[]; skipped: number } {
+  const occupied: SlotInterval[] = [...existing];
+  const kept: T[] = [];
+  let skipped = 0;
+
+  for (const candidate of candidates) {
+    if (occupied.some((slot) => intervalsOverlap(slot, candidate))) {
+      skipped += 1;
+      continue;
+    }
+    kept.push(candidate);
+    occupied.push(candidate);
+  }
+
+  return { kept, skipped };
+}
+
+async function getOverlappingSlotsInRange(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workspaceId: string,
+  rangeStartIso: string,
+  rangeEndIso: string,
+  excludeSlotId?: string,
+): Promise<SlotInterval[]> {
+  let query = supabase
+    .from("slots")
+    .select("id, starts_at, ends_at")
+    .eq("workspace_id", workspaceId)
+    .lt("starts_at", rangeEndIso)
+    .gt("ends_at", rangeStartIso);
+
+  if (excludeSlotId) {
+    query = query.neq("id", excludeSlotId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    starts_at: row.starts_at,
+    ends_at: row.ends_at,
+  }));
+}
+
 /** Apply a color choice to every time slot in the workspace with the same title. */
 async function syncColorForTitle(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -207,8 +264,9 @@ export async function createSlot(input: {
   endTime: string;
   capacity: number;
   colorKey?: string | null;
+  repeat?: "none" | "daily" | "weekly" | "weekdays";
   timeZoneOffsetMinutes: number;
-}): Promise<ActionResult<Slot>> {
+}): Promise<ActionResult<{ created: number; skipped: number; slot: Slot }>> {
   const parsed = slotFormSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid spot" };
@@ -217,20 +275,23 @@ export async function createSlot(input: {
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
 
-  const startsAt = wallDateTimeToUtc(
+  const dates = expandRepeatDates(
     parsed.data.date,
-    parsed.data.startTime,
-    input.timeZoneOffsetMinutes,
-  );
-  const endsAt = wallDateTimeToUtc(
-    parsed.data.date,
-    parsed.data.endTime,
-    input.timeZoneOffsetMinutes,
+    parsed.data.repeat ?? "none",
   );
 
-  const { data, error } = await admin.supabase
-    .from("slots")
-    .insert({
+  const candidates = dates.map((date) => {
+    const startsAt = wallDateTimeToUtc(
+      date,
+      parsed.data.startTime,
+      input.timeZoneOffsetMinutes,
+    );
+    const endsAt = wallDateTimeToUtc(
+      date,
+      parsed.data.endTime,
+      input.timeZoneOffsetMinutes,
+    );
+    return {
       workspace_id: input.workspaceId,
       title: parsed.data.title,
       color_key: parsed.data.colorKey ?? null,
@@ -238,30 +299,75 @@ export async function createSlot(input: {
       ends_at: endsAt.toISOString(),
       capacity: parsed.data.capacity,
       created_by: admin.user!.id,
-    })
-    .select("*")
-    .single();
+    };
+  });
+
+  const rangeStart = candidates.reduce(
+    (min, row) => (row.starts_at < min ? row.starts_at : min),
+    candidates[0]!.starts_at,
+  );
+  const rangeEnd = candidates.reduce(
+    (max, row) => (row.ends_at > max ? row.ends_at : max),
+    candidates[0]!.ends_at,
+  );
+
+  let existing: SlotInterval[];
+  try {
+    existing = await getOverlappingSlotsInRange(
+      admin.supabase,
+      input.workspaceId,
+      rangeStart,
+      rangeEnd,
+    );
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not check existing spots.",
+    };
+  }
+
+  const { kept: rows, skipped } = filterNonOverlappingSlots(candidates, existing);
+
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      error:
+        skipped > 1
+          ? "All of those times overlap existing time slots."
+          : "That time overlaps an existing time slot.",
+    };
+  }
+
+  const { data, error } = await admin.supabase
+    .from("slots")
+    .insert(rows)
+    .select("*");
 
   if (error) return { ok: false, error: slotWriteErrorMessage(error.message) };
+
+  const createdSlots = (data ?? []) as Slot[];
+  const first = createdSlots[0];
+  if (!first) {
+    return { ok: false, error: "Could not create time slot." };
+  }
 
   const title = parsed.data.title;
   const colorKey = parsed.data.colorKey ?? null;
 
   try {
     if (colorKey !== null) {
-      // Lock this color onto every same-titled time slot.
       await syncColorForTitle(admin.supabase, input.workspaceId, title, colorKey);
     } else if (title.trim()) {
-      // Auto: inherit a locked color from an existing same-title slot, if any.
       const { data: siblings } = await admin.supabase
         .from("slots")
         .select("id, title, color_key")
         .eq("workspace_id", input.workspaceId);
 
       const normalized = title.trim().toLowerCase();
+      const createdIds = new Set(createdSlots.map((s) => s.id));
       const locked = (siblings ?? []).find(
         (s) =>
-          s.id !== data.id &&
+          !createdIds.has(s.id) &&
           (s.title ?? "").trim().toLowerCase() === normalized &&
           s.color_key,
       );
@@ -273,7 +379,7 @@ export async function createSlot(input: {
             color_key: locked.color_key,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", data.id);
+          .in("id", [...createdIds]);
       }
     }
   } catch (e) {
@@ -286,10 +392,17 @@ export async function createSlot(input: {
   const { data: fresh } = await admin.supabase
     .from("slots")
     .select("*")
-    .eq("id", data.id)
+    .eq("id", first.id)
     .single();
 
-  return { ok: true, data: (fresh ?? data) as Slot };
+  return {
+    ok: true,
+    data: {
+      created: createdSlots.length,
+      skipped,
+      slot: (fresh ?? first) as Slot,
+    },
+  };
 }
 
 export async function updateSlot(input: {
@@ -334,6 +447,34 @@ export async function updateSlot(input: {
     parsed.data.endTime,
     input.timeZoneOffsetMinutes,
   );
+
+  try {
+    const existing = await getOverlappingSlotsInRange(
+      admin.supabase,
+      input.workspaceId,
+      startsAt.toISOString(),
+      endsAt.toISOString(),
+      input.slotId,
+    );
+    if (
+      existing.some((slot) =>
+        intervalsOverlap(slot, {
+          starts_at: startsAt.toISOString(),
+          ends_at: endsAt.toISOString(),
+        }),
+      )
+    ) {
+      return {
+        ok: false,
+        error: "That time overlaps an existing time slot.",
+      };
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not check existing spots.",
+    };
+  }
 
   const { data, error } = await admin.supabase
     .from("slots")
@@ -421,10 +562,13 @@ async function copySlotsToDates(
   sourceSlots: Slot[],
   targetDateStrs: string[],
   timeZoneOffsetMinutes: number,
-): Promise<number> {
-  if (sourceSlots.length === 0 || targetDateStrs.length === 0) return 0;
+): Promise<{ created: number; skipped: number }> {
+  if (sourceSlots.length === 0 || targetDateStrs.length === 0) {
+    return { created: 0, skipped: 0 };
+  }
 
-  const rows = targetDateStrs.flatMap((targetDate) =>
+  const workspaceId = sourceSlots[0]!.workspace_id;
+  const candidates = targetDateStrs.flatMap((targetDate) =>
     sourceSlots.map((slot) => {
       const startWall = utcToWallParts(slot.starts_at, timeZoneOffsetMinutes);
       const endWall = utcToWallParts(slot.ends_at, timeZoneOffsetMinutes);
@@ -451,9 +595,30 @@ async function copySlotsToDates(
     }),
   );
 
+  const rangeStart = candidates.reduce(
+    (min, row) => (row.starts_at < min ? row.starts_at : min),
+    candidates[0]!.starts_at,
+  );
+  const rangeEnd = candidates.reduce(
+    (max, row) => (row.ends_at > max ? row.ends_at : max),
+    candidates[0]!.ends_at,
+  );
+
+  const existing = await getOverlappingSlotsInRange(
+    supabase,
+    workspaceId,
+    rangeStart,
+    rangeEnd,
+  );
+  const { kept: rows, skipped } = filterNonOverlappingSlots(candidates, existing);
+
+  if (rows.length === 0) {
+    return { created: 0, skipped };
+  }
+
   const { error, data } = await supabase.from("slots").insert(rows).select("id");
   if (error) throw new Error(error.message);
-  return data?.length ?? 0;
+  return { created: data?.length ?? 0, skipped };
 }
 
 async function getSlotsForDay(
@@ -480,7 +645,7 @@ export async function duplicateSameWeekdayInMonth(input: {
   workspaceId: string;
   sourceDate: string;
   timeZoneOffsetMinutes: number;
-}): Promise<ActionResult<{ created: number }>> {
+}): Promise<ActionResult<{ created: number; skipped: number }>> {
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
 
@@ -497,14 +662,14 @@ export async function duplicateSameWeekdayInMonth(input: {
     }
 
     const targets = sameWeekdayDatesInMonth(source, source).map(ymd);
-    const created = await copySlotsToDates(
+    const result = await copySlotsToDates(
       admin.supabase,
       admin.user!.id,
       slots,
       targets,
       input.timeZoneOffsetMinutes,
     );
-    return { ok: true, data: { created } };
+    return { ok: true, data: result };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Duplicate failed" };
   }
@@ -514,7 +679,7 @@ export async function duplicateWeekdaysInMonth(input: {
   workspaceId: string;
   sourceDate: string;
   timeZoneOffsetMinutes: number;
-}): Promise<ActionResult<{ created: number }>> {
+}): Promise<ActionResult<{ created: number; skipped: number }>> {
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
 
@@ -531,14 +696,14 @@ export async function duplicateWeekdaysInMonth(input: {
     }
 
     const targets = weekdayDatesInMonth(source, source).map(ymd);
-    const created = await copySlotsToDates(
+    const result = await copySlotsToDates(
       admin.supabase,
       admin.user!.id,
       slots,
       targets,
       input.timeZoneOffsetMinutes,
     );
-    return { ok: true, data: { created } };
+    return { ok: true, data: result };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Duplicate failed" };
   }
@@ -548,7 +713,7 @@ export async function duplicatePreviousMonth(input: {
   workspaceId: string;
   targetMonthKey: string;
   timeZoneOffsetMinutes: number;
-}): Promise<ActionResult<{ created: number; skippedDays: number }>> {
+}): Promise<ActionResult<{ created: number; skipped: number }>> {
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
 
@@ -559,10 +724,6 @@ export async function duplicatePreviousMonth(input: {
 
     const sourceBounds = monthBoundsUtc(
       sourceMonthKey,
-      input.timeZoneOffsetMinutes,
-    );
-    const targetBounds = monthBoundsUtc(
-      input.targetMonthKey,
       input.timeZoneOffsetMinutes,
     );
 
@@ -578,25 +739,11 @@ export async function duplicatePreviousMonth(input: {
       return { ok: false, error: "Previous month has no spots to copy." };
     }
 
-    const { data: existing } = await admin.supabase
-      .from("slots")
-      .select("starts_at")
-      .eq("workspace_id", input.workspaceId)
-      .gte("starts_at", targetBounds.start)
-      .lt("starts_at", targetBounds.endExclusive);
-
-    const occupiedDays = new Set(
-      (existing ?? []).map((s) => {
-        const wall = utcToWallParts(s.starts_at, input.timeZoneOffsetMinutes);
-        return wall.date;
-      }),
-    );
-
     // Anchor target month as noon-UTC on the 1st for weekday mapping math.
     const [ty, tm] = input.targetMonthKey.split("-").map(Number);
     const targetMonthNoon = new Date(Date.UTC(ty, tm - 1, 1, 12, 0, 0, 0));
 
-    const rows: Array<{
+    const candidates: Array<{
       workspace_id: string;
       title: string;
       color_key: string | null;
@@ -605,7 +752,7 @@ export async function duplicatePreviousMonth(input: {
       capacity: number;
       created_by: string;
     }> = [];
-    let skippedDays = 0;
+    let unmapped = 0;
 
     for (const slot of sourceSlots as Slot[]) {
       const sourceWall = utcToWallParts(slot.starts_at, input.timeZoneOffsetMinutes);
@@ -613,16 +760,11 @@ export async function duplicatePreviousMonth(input: {
       const sourceDate = calendarDateAtNoonUtc(sourceWall.date);
       const mapped = mapDateToMonthByWeekdayOccurrence(sourceDate, targetMonthNoon);
       if (!mapped) {
-        skippedDays += 1;
+        unmapped += 1;
         continue;
       }
 
       const mappedDate = ymd(mapped);
-      if (occupiedDays.has(mappedDate)) {
-        skippedDays += 1;
-        continue;
-      }
-
       const startsAt = wallDateTimeToUtc(
         mappedDate,
         sourceWall.time,
@@ -634,7 +776,7 @@ export async function duplicatePreviousMonth(input: {
         input.timeZoneOffsetMinutes,
       );
 
-      rows.push({
+      candidates.push({
         workspace_id: input.workspaceId,
         title: slot.title ?? "",
         color_key: slot.color_key ?? null,
@@ -643,11 +785,35 @@ export async function duplicatePreviousMonth(input: {
         capacity: slot.capacity,
         created_by: admin.user!.id,
       });
-      occupiedDays.add(mappedDate);
     }
 
+    if (candidates.length === 0) {
+      return { ok: true, data: { created: 0, skipped: unmapped } };
+    }
+
+    const rangeStart = candidates.reduce(
+      (min, row) => (row.starts_at < min ? row.starts_at : min),
+      candidates[0]!.starts_at,
+    );
+    const rangeEnd = candidates.reduce(
+      (max, row) => (row.ends_at > max ? row.ends_at : max),
+      candidates[0]!.ends_at,
+    );
+
+    const existing = await getOverlappingSlotsInRange(
+      admin.supabase,
+      input.workspaceId,
+      rangeStart,
+      rangeEnd,
+    );
+    const { kept: rows, skipped: skippedOverlaps } = filterNonOverlappingSlots(
+      candidates,
+      existing,
+    );
+    const skipped = unmapped + skippedOverlaps;
+
     if (rows.length === 0) {
-      return { ok: true, data: { created: 0, skippedDays } };
+      return { ok: true, data: { created: 0, skipped } };
     }
 
     const { data, error: insertError } = await admin.supabase
@@ -656,7 +822,7 @@ export async function duplicatePreviousMonth(input: {
       .select("id");
 
     if (insertError) return { ok: false, error: insertError.message };
-    return { ok: true, data: { created: data?.length ?? 0, skippedDays } };
+    return { ok: true, data: { created: data?.length ?? 0, skipped } };
   } catch (e) {
     return {
       ok: false,

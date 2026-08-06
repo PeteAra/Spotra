@@ -29,13 +29,13 @@ export function DuplicatePreviousMonthPrompt({
         <DialogHeader>
           <DialogTitle>Duplicate previous month?</DialogTitle>
           <DialogDescription>
-            Copy last month&apos;s spot pattern into {targetLabel}. Days that
-            already have spots will be skipped.
+            Copy last month&apos;s spot pattern into {targetLabel}. Times that
+            already overlap an existing slot will be skipped.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="ghost" onClick={onSkip}>
-            No, just open month
+            Cancel
           </Button>
           <Button onClick={() => void onConfirm()}>Yes, duplicate</Button>
         </DialogFooter>

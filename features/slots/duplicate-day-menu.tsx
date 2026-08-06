@@ -35,7 +35,11 @@ export function DuplicateDayMenu({
             return;
           }
           toast.success(
-            `Duplicated to all ${weekdayLabel}s (${result.data.created} spots)`,
+            `Duplicated to all ${weekdayLabel}s (${result.data.created} spots` +
+              (result.data.skipped
+                ? `, ${result.data.skipped} skipped — overlapping`
+                : "") +
+              ")",
           );
           onDone();
         }}
@@ -56,7 +60,11 @@ export function DuplicateDayMenu({
             return;
           }
           toast.success(
-            `Duplicated to weekdays (${result.data.created} spots)`,
+            `Duplicated to weekdays (${result.data.created} spots` +
+              (result.data.skipped
+                ? `, ${result.data.skipped} skipped — overlapping`
+                : "") +
+              ")",
           );
           onDone();
         }}

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
+import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -27,10 +28,20 @@ import {
   SLOT_COLOR_OPTIONS,
   type SlotColorKey,
 } from "@/lib/utils/slot-color";
-import { getClientTimeZoneOffsetMinutes } from "@/lib/utils/dates";
+import {
+  expandRepeatDates,
+  getClientTimeZoneOffsetMinutes,
+} from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
-import { slotFormSchema, type SlotFormInput } from "@/lib/validators";
+import {
+  slotFormSchema,
+  slotRepeatRules,
+  type SlotFormInput,
+} from "@/lib/validators";
 import type { SlotWithReservations } from "@/types";
+
+const selectClassName =
+  "flex h-10 w-full cursor-pointer appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 pr-9 text-sm text-[var(--foreground)] shadow-[inset_0_1px_0_color-mix(in_srgb,white_55%,transparent)] transition hover:border-[var(--accent)]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]";
 
 export function SlotFormDialog({
   open,
@@ -56,13 +67,32 @@ export function SlotFormDialog({
       endTime: "09:30",
       capacity: 1,
       colorKey: null,
+      repeat: "none",
     },
   });
 
   const watchedTitle = form.watch("title");
   const watchedColorKey = form.watch("colorKey");
+  const watchedRepeat = form.watch("repeat");
   const previewColor = resolveSlotColor(watchedTitle, watchedColorKey ?? null);
   const isAutoColor = !watchedColorKey;
+  const weekdayLabel = format(day, "EEEE");
+  const monthLabel = format(day, "MMMM");
+
+  const repeatOptions = useMemo(
+    () => [
+      { value: "none" as const, label: "Does not repeat" },
+      { value: "daily" as const, label: "Daily" },
+      { value: "weekly" as const, label: `Weekly on ${weekdayLabel}` },
+      { value: "weekdays" as const, label: "Every weekday (Monday–Friday)" },
+    ],
+    [weekdayLabel],
+  );
+
+  const repeatCount = useMemo(() => {
+    if (slot || !watchedRepeat || watchedRepeat === "none") return 1;
+    return expandRepeatDates(format(day, "yyyy-MM-dd"), watchedRepeat).length;
+  }, [day, slot, watchedRepeat]);
 
   useEffect(() => {
     if (!open) return;
@@ -76,6 +106,7 @@ export function SlotFormDialog({
         endTime: snapToTimeStep(format(end, "HH:mm")),
         capacity: slot.capacity,
         colorKey: isSlotColorKey(slot.color_key) ? slot.color_key : null,
+        repeat: "none",
       });
     } else {
       form.reset({
@@ -85,6 +116,7 @@ export function SlotFormDialog({
         endTime: "09:30",
         capacity: 1,
         colorKey: null,
+        repeat: "none",
       });
     }
   }, [open, slot, day, form]);
@@ -102,24 +134,39 @@ export function SlotFormDialog({
         <form
           className="space-y-4"
           onSubmit={form.handleSubmit(async (values) => {
-            const result = slot
-              ? await updateSlot({
-                  slotId: slot.id,
-                  workspaceId,
-                  timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
-                  ...values,
-                })
-              : await createSlot({
-                  workspaceId,
-                  timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
-                  ...values,
-                });
-
-            if (!result.ok) {
-              toast.error(result.error);
-              return;
+            if (slot) {
+              const result = await updateSlot({
+                slotId: slot.id,
+                workspaceId,
+                timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
+                ...values,
+              });
+              if (!result.ok) {
+                toast.error(result.error);
+                return;
+              }
+              toast.success("Time slot updated");
+            } else {
+              const result = await createSlot({
+                workspaceId,
+                timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
+                ...values,
+              });
+              if (!result.ok) {
+                toast.error(result.error);
+                return;
+              }
+              toast.success(
+                result.data.created > 1
+                  ? `Created ${result.data.created} time slots` +
+                      (result.data.skipped
+                        ? ` (${result.data.skipped} skipped — overlapping times)`
+                        : "")
+                  : result.data.skipped
+                    ? "Time slot created (some overlapping times were skipped)"
+                    : "Time slot created",
+              );
             }
-            toast.success(slot ? "Time slot updated" : "Time slot created");
             onOpenChange(false);
             await onSaved();
           })}
@@ -236,6 +283,42 @@ export function SlotFormDialog({
               {form.formState.errors.endTime.message}
             </p>
           )}
+
+          {!slot && (
+            <div className="space-y-2">
+              <Label htmlFor="repeat">Repeat</Label>
+              <div className="relative">
+                <select
+                  id="repeat"
+                  className={selectClassName}
+                  value={watchedRepeat ?? "none"}
+                  onChange={(e) =>
+                    form.setValue(
+                      "repeat",
+                      e.target.value as (typeof slotRepeatRules)[number],
+                      { shouldDirty: true, shouldValidate: true },
+                    )
+                  }
+                >
+                  {repeatOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]"
+                  aria-hidden
+                />
+              </div>
+              <p className="text-xs text-[var(--muted)]">
+                {watchedRepeat && watchedRepeat !== "none"
+                  ? `Creates ${repeatCount} time slot${repeatCount === 1 ? "" : "s"} through the end of ${monthLabel}.`
+                  : "Only creates this one time slot."}
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="capacity">Capacity (participants)</Label>
             <Input

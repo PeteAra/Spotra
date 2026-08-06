@@ -192,3 +192,40 @@ export function calendarDateAtNoonUtc(date: string): Date {
   const [year, month, day] = date.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
 }
+
+export type SlotRepeatRule = "none" | "daily" | "weekly" | "weekdays";
+
+/**
+ * Expand a start date into occurrence dates through the end of that month.
+ * Used when creating a repeating time slot (Google Calendar–style presets).
+ */
+export function expandRepeatDates(
+  startDate: string,
+  repeat: SlotRepeatRule,
+): string[] {
+  if (repeat === "none") return [startDate];
+
+  const start = calendarDateAtNoonUtc(startDate);
+  const year = start.getUTCFullYear();
+  const month = start.getUTCMonth();
+  const startDay = start.getUTCDate();
+  const weekday = start.getUTCDay();
+  const lastDay = new Date(Date.UTC(year, month + 1, 0, 12)).getUTCDate();
+
+  const dates: string[] = [];
+  for (let day = startDay; day <= lastDay; day += 1) {
+    const current = new Date(Date.UTC(year, month, day, 12));
+    const dow = current.getUTCDay();
+    const include =
+      repeat === "daily" ||
+      (repeat === "weekly" && dow === weekday) ||
+      (repeat === "weekdays" && dow >= 1 && dow <= 5);
+
+    if (include) {
+      dates.push(
+        `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      );
+    }
+  }
+  return dates;
+}

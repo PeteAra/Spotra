@@ -49,9 +49,8 @@ export function CalendarMonthView({
   const [editingSlot, setEditingSlot] = useState<SlotWithReservations | null>(
     null,
   );
-  const [duplicatePromptOpen, setDuplicatePromptOpen] = useState(false);
-  const [pendingMonth, setPendingMonth] = useState<Date | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [duplicatePromptOpen, setDuplicatePromptOpen] = useState(false);
 
   const detailRef = useRef<HTMLDivElement>(null);
 
@@ -92,12 +91,7 @@ export function CalendarMonthView({
     : null;
   const selectedSlots = selectedKey ? (slotsByDay.get(selectedKey) ?? []) : [];
 
-  function goToMonth(next: Date, offerDuplicate: boolean) {
-    if (role === "admin" && offerDuplicate) {
-      setPendingMonth(next);
-      setDuplicatePromptOpen(true);
-      return;
-    }
+  function goToMonth(next: Date) {
     setMonth(next);
     setSelectedDay(next);
   }
@@ -110,7 +104,7 @@ export function CalendarMonthView({
             <Button
               variant="secondary"
               size="icon"
-              onClick={() => goToMonth(previousMonth(month), false)}
+              onClick={() => goToMonth(previousMonth(month))}
               aria-label="Previous month"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -121,7 +115,7 @@ export function CalendarMonthView({
             <Button
               variant="secondary"
               size="icon"
-              onClick={() => goToMonth(nextMonth(month), true)}
+              onClick={() => goToMonth(nextMonth(month))}
               aria-label="Next month"
             >
               <ChevronRight className="h-4 w-4" />
@@ -144,10 +138,7 @@ export function CalendarMonthView({
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => {
-                    setPendingMonth(month);
-                    setDuplicatePromptOpen(true);
-                  }}
+                  onClick={() => setDuplicatePromptOpen(true)}
                 >
                   <Copy className="h-3.5 w-3.5" />
                   Duplicate previous month
@@ -291,19 +282,11 @@ export function CalendarMonthView({
 
       <DuplicatePreviousMonthPrompt
         open={duplicatePromptOpen}
-        onOpenChange={(open) => {
-          setDuplicatePromptOpen(open);
-          if (!open && pendingMonth) {
-            setMonth(pendingMonth);
-            setSelectedDay(pendingMonth);
-            setPendingMonth(null);
-          }
-        }}
+        onOpenChange={setDuplicatePromptOpen}
         onConfirm={async () => {
-          const target = pendingMonth ?? month;
           const result = await duplicatePreviousMonth({
             workspaceId,
-            targetMonthKey: monthKey(target),
+            targetMonthKey: monthKey(month),
             timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
           });
           if (!result.ok) {
@@ -311,25 +294,16 @@ export function CalendarMonthView({
           } else {
             toast.success(
               `Created ${result.data.created} spots` +
-                (result.data.skippedDays
-                  ? ` (${result.data.skippedDays} days skipped)`
+                (result.data.skipped
+                  ? ` (${result.data.skipped} skipped — overlapping times)`
                   : ""),
             );
           }
-          setMonth(target);
-          setSelectedDay(target);
-          setPendingMonth(null);
           setDuplicatePromptOpen(false);
           invalidate();
         }}
-        onSkip={() => {
-          const target = pendingMonth ?? month;
-          setMonth(target);
-          setSelectedDay(target);
-          setPendingMonth(null);
-          setDuplicatePromptOpen(false);
-        }}
-        targetLabel={format(pendingMonth ?? month, "MMMM yyyy")}
+        onSkip={() => setDuplicatePromptOpen(false)}
+        targetLabel={format(month, "MMMM yyyy")}
       />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>

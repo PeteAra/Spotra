@@ -6,6 +6,13 @@ const slotColorKeys = SLOT_COLOR_OPTIONS.map((c) => c.key) as [
   ...(typeof SLOT_COLOR_OPTIONS)[number]["key"][],
 ];
 
+export const slotRepeatRules = [
+  "none",
+  "daily",
+  "weekly",
+  "weekdays",
+] as const;
+
 export const workspaceTitleSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(120),
 });
@@ -24,6 +31,7 @@ export const slotFormSchema = z
       .transform((t) => t.slice(0, 5)),
     capacity: z.coerce.number().int().min(0).max(100),
     colorKey: z.enum(slotColorKeys).nullable().optional(),
+    repeat: z.enum(slotRepeatRules),
   })
   .refine((data) => data.endTime > data.startTime, {
     message: "End time must be after start time",
