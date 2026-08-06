@@ -17,6 +17,7 @@ import { SlotBlock } from "@/features/calendar/slot-block";
 import { DuplicateDayMenu } from "@/features/slots/duplicate-day-menu";
 import { deleteSlotsInDay } from "@/features/slots/actions";
 import { getClientTimeZoneOffsetMinutes } from "@/lib/utils/dates";
+import { cn } from "@/lib/utils/cn";
 import type { SlotWithReservations, WorkspaceRole } from "@/types";
 
 function AddSpotCallout({
@@ -57,6 +58,7 @@ export function DayDetailPanel({
   role,
   accountId,
   workspaceId,
+  fillHeight = false,
   onAddSlot,
   onEditSlot,
   onSlotsChanged,
@@ -66,6 +68,7 @@ export function DayDetailPanel({
   role: WorkspaceRole;
   accountId: string;
   workspaceId: string;
+  fillHeight?: boolean;
   onAddSlot: () => void;
   onEditSlot: (slot: SlotWithReservations) => void;
   onSlotsChanged: () => void | Promise<void>;
@@ -75,7 +78,12 @@ export function DayDetailPanel({
 
   if (!day) {
     return (
-      <aside className="rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-6 text-[var(--muted)]">
+      <aside
+        className={cn(
+          "rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-6 text-[var(--muted)]",
+          fillHeight && "lg:h-full",
+        )}
+      >
         Select a day to view or create time slots.
       </aside>
     );
@@ -85,8 +93,15 @@ export function DayDetailPanel({
   const dateKey = format(day, "yyyy-MM-dd");
 
   return (
-    <aside className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm sm:p-6">
-      <div className="flex items-start justify-between gap-3">
+    <aside
+      className={cn(
+        "flex flex-col rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm sm:p-6",
+        fillHeight
+          ? "h-full min-h-0 w-full"
+          : "lg:max-h-[min(70vh,36rem)]",
+      )}
+    >
+      <div className="flex shrink-0 items-start justify-between gap-3">
         <div>
           <p className="text-sm text-[var(--muted)]">{format(day, "EEEE")}</p>
           <h3 className="font-[family-name:var(--font-display)] text-2xl font-semibold">
@@ -113,8 +128,8 @@ export function DayDetailPanel({
         )}
       </div>
 
-      <div className="mt-4 space-y-2">
-        {role === "admin" && (
+      {role === "admin" && (
+        <div className="mt-4 shrink-0">
           <AddSpotCallout
             onClick={onAddSlot}
             title={
@@ -128,7 +143,16 @@ export function DayDetailPanel({
                 : undefined
             }
           />
+        </div>
+      )}
+
+      <div
+        className={cn(
+          "mt-2 space-y-2",
+          "lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-0.5",
+          fillHeight && "min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5",
         )}
+      >
         {slots.length === 0 ? (
           role !== "admin" ? (
             <p className="rounded-xl bg-[var(--surface-muted)] px-3 py-4 text-center text-sm text-[var(--muted)]">

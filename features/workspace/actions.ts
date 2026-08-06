@@ -1,8 +1,10 @@
 "use server";
 
 import { unstable_noStore as noStore } from "next/cache";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { workspaceTitleSchema } from "@/lib/validators";
+import { maybeSendWelcomeEmail } from "@/lib/notifications";
 import { slugify, withSlugSuffix } from "@/lib/utils/slugify";
 import type { ActionResult, Workspace, WorkspaceGate } from "@/types";
 
@@ -36,6 +38,11 @@ async function ensureAccount() {
         null,
     });
   }
+
+  // After the response so welcome mail doesn't slow navigation.
+  after(() => {
+    void maybeSendWelcomeEmail(supabase, user.id);
+  });
 
   return { supabase, user, accountId: user.id };
 }

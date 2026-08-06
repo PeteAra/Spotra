@@ -7,6 +7,7 @@ export type Account = {
   email: string;
   display_name: string;
   avatar_url: string | null;
+  welcome_email_sent_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -90,6 +91,21 @@ export type SlotWithReservations = Slot & {
   reservations: Reservation[];
   claimed_count: number;
   availability: SlotAvailability;
+};
+
+export type MyClaimedSpot = {
+  reservation_id: string;
+  claimed_at: string;
+  slot: Pick<
+    Slot,
+    | "id"
+    | "workspace_id"
+    | "title"
+    | "color_key"
+    | "starts_at"
+    | "ends_at"
+    | "capacity"
+  >;
 };
 
 export type WorkspaceGate = {

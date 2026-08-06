@@ -9,6 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { claimSlot } from "@/features/reservations/actions";
+import { getClientTimeZoneOffsetMinutes } from "@/lib/utils/dates";
 
 export function SlotClaimToast({
   open,
@@ -46,7 +47,10 @@ export function SlotClaimToast({
             disabled={loading}
             onClick={async () => {
               setLoading(true);
-              const result = await claimSlot(slotId);
+              const result = await claimSlot({
+                slotId,
+                timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
+              });
               setLoading(false);
               if (!result.ok) {
                 toast.error(result.error);

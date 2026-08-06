@@ -133,9 +133,14 @@ export function LandingPage() {
             className="h-12 w-12 shrink-0 sm:h-14 sm:w-14"
           />
           <div>
-            <p className="font-[family-name:var(--font-body)] text-2xl font-semibold tracking-tight text-[#0F2E1F] sm:text-3xl">
-              Spotra
-            </p>
+            <div className="flex items-baseline gap-2.5">
+              <p className="font-[family-name:var(--font-body)] text-2xl font-semibold tracking-tight text-[#0F2E1F] sm:text-3xl">
+                Spotra
+              </p>
+              <span className="translate-y-[-0.1em] text-[0.7rem] font-medium uppercase tracking-[0.18em] text-[var(--muted)] sm:text-xs">
+                Beta
+              </span>
+            </div>
             <p className="mt-0.5 text-sm text-[var(--muted)] sm:text-base">
               Share your time. Simplify scheduling.
             </p>

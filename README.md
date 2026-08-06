@@ -50,6 +50,8 @@ Fill in:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `NEXT_PUBLIC_SITE_URL` — `http://localhost:3000` locally, `https://spotra.dev` in production
+- `RESEND_API_KEY` — from [resend.com](https://resend.com) (optional locally; emails are skipped if unset)
+- `RESEND_FROM_EMAIL` — verified sender, e.g. `Spotra <hello@spotra.dev>`
 
 ### 4. Run
 
@@ -72,9 +74,10 @@ Open [http://localhost:3000](http://localhost:3000).
 2. Set the same env vars; set `NEXT_PUBLIC_SITE_URL=https://spotra.dev`.
 3. Attach the `spotra.dev` domain in Vercel project settings.
 4. Add production redirect URL in Supabase Auth: `https://spotra.dev/auth/callback`.
+5. Add `RESEND_API_KEY` and `RESEND_FROM_EMAIL`, and verify your sending domain in Resend.
 
 ## Notes
 
 - Reservation history is never deleted.
 - Claims are capacity-safe via `claim_slot` RPC.
-- Email (Resend) is stubbed in `lib/notifications.ts` for later.
+- New users get a welcome email; every successful claim sends a confirmation (via Resend).

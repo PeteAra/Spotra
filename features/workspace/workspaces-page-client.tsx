@@ -52,8 +52,9 @@ export function WorkspacesPageClient() {
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-[var(--muted)]">
+          <p className="flex items-center gap-2 text-sm font-medium uppercase tracking-[0.2em] text-[var(--muted)]">
             Spotra
+            <span className="text-[0.65rem] tracking-[0.18em]">Beta</span>
           </p>
           <h1 className="mt-1 font-[family-name:var(--font-display)] text-3xl font-semibold sm:text-4xl">
             Your workspaces

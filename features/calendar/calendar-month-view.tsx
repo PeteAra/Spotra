@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { format, isSameDay, isToday } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, ListChecks, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DayDetailPanel } from "@/features/calendar/day-detail-panel";
+import { MySpotsPanel } from "@/features/calendar/my-spots-panel";
 import { DuplicatePreviousMonthPrompt } from "@/features/slots/duplicate-previous-month-prompt";
 import { SlotFormDialog } from "@/features/slots/slot-form-dialog";
 import {
@@ -34,6 +36,23 @@ import type { SlotWithReservations, WorkspaceRole } from "@/types";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+function isStackedLayout() {
+  return typeof window !== "undefined" && window.innerWidth < 1024;
+}
+
+function scrollCardIntoView(node: HTMLElement | null) {
+  if (!node || !isStackedLayout()) return;
+  // Wait until the card has painted/laid out (especially after opening).
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      node.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  });
+}
+
 export function CalendarMonthView({
   workspaceId,
   role,
@@ -51,28 +70,62 @@ export function CalendarMonthView({
   );
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [duplicatePromptOpen, setDuplicatePromptOpen] = useState(false);
+  const [mySpotsOpen, setMySpotsOpen] = useState(false);
 
   const detailRef = useRef<HTMLDivElement>(null);
+  const mySpotsRef = useRef<HTMLDivElement>(null);
+  const calendarRef = useRef<HTMLElement>(null);
+  const queryClient = useQueryClient();
+  const [dayColumnHeight, setDayColumnHeight] = useState<number | null>(null);
 
   const selectDay = useCallback((day: Date) => {
     setSelectedDay(day);
-    // On stacked (mobile) layouts the detail card sits below the grid, so
-    // bring it into view once the selection has rendered.
-    if (typeof window !== "undefined" && window.innerWidth < 1024) {
-      requestAnimationFrame(() => {
-        detailRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      });
-    }
+    setMonth(day);
+    scrollCardIntoView(detailRef.current);
   }, []);
+
+  useEffect(() => {
+    if (!mySpotsOpen) return;
+    scrollCardIntoView(mySpotsRef.current);
+  }, [mySpotsOpen]);
 
   const { data: slots = [], isLoading, error: slotsError } = useSlots(
     workspaceId,
     month,
   );
-  const invalidate = useInvalidateSlots(workspaceId, month);
+  const invalidateSlots = useInvalidateSlots(workspaceId, month);
+
+  useEffect(() => {
+    const calendar = calendarRef.current;
+    if (!calendar || mySpotsOpen) {
+      setDayColumnHeight(null);
+      return;
+    }
+
+    const syncHeight = () => {
+      if (!isStackedLayout()) {
+        setDayColumnHeight(calendar.getBoundingClientRect().height);
+      } else {
+        setDayColumnHeight(null);
+      }
+    };
+
+    syncHeight();
+    const observer = new ResizeObserver(syncHeight);
+    observer.observe(calendar);
+    window.addEventListener("resize", syncHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", syncHeight);
+    };
+  }, [mySpotsOpen, month, isLoading]);
+
+  const invalidate = useCallback(async () => {
+    await invalidateSlots();
+    await queryClient.invalidateQueries({
+      queryKey: ["my-claimed-slots", workspaceId],
+    });
+  }, [invalidateSlots, queryClient, workspaceId]);
 
   const slotsByDay = useMemo(() => {
     const map = new Map<string, SlotWithReservations[]>();
@@ -97,8 +150,11 @@ export function CalendarMonthView({
   }
 
   return (
-    <div className="mt-8 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-      <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm sm:p-6">
+    <div className="mt-8 grid items-start gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <section
+        ref={calendarRef}
+        className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm sm:p-6 lg:sticky lg:top-4"
+      >
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Button
@@ -132,6 +188,14 @@ export function CalendarMonthView({
               }}
             >
               Today
+            </Button>
+            <Button
+              variant={mySpotsOpen ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setMySpotsOpen((open) => !open)}
+            >
+              <ListChecks className="h-3.5 w-3.5" />
+              My Spots
             </Button>
             {role === "admin" && (
               <>
@@ -250,23 +314,50 @@ export function CalendarMonthView({
         )}
       </section>
 
-      <div ref={detailRef} className="scroll-mt-4">
-        <DayDetailPanel
-          day={selectedDay}
-          slots={selectedSlots}
-          role={role}
-          accountId={accountId}
-          workspaceId={workspaceId}
-          onAddSlot={() => {
-            setEditingSlot(null);
-            setSlotFormOpen(true);
-          }}
-          onEditSlot={(slot) => {
-            setEditingSlot(slot);
-            setSlotFormOpen(true);
-          }}
-          onSlotsChanged={invalidate}
-        />
+      <div
+        className="flex flex-col gap-6"
+        style={
+          dayColumnHeight != null
+            ? { height: dayColumnHeight }
+            : undefined
+        }
+      >
+        {mySpotsOpen ? (
+          <div ref={mySpotsRef} className="scroll-mt-4 shrink-0">
+            <MySpotsPanel
+              workspaceId={workspaceId}
+              open={mySpotsOpen}
+              onClose={() => setMySpotsOpen(false)}
+              onSelectDay={selectDay}
+              onChanged={invalidate}
+            />
+          </div>
+        ) : null}
+        <div
+          ref={detailRef}
+          className={cn(
+            "scroll-mt-4",
+            dayColumnHeight != null && "flex min-h-0 flex-1 flex-col",
+          )}
+        >
+          <DayDetailPanel
+            day={selectedDay}
+            slots={selectedSlots}
+            role={role}
+            accountId={accountId}
+            workspaceId={workspaceId}
+            fillHeight={dayColumnHeight != null}
+            onAddSlot={() => {
+              setEditingSlot(null);
+              setSlotFormOpen(true);
+            }}
+            onEditSlot={(slot) => {
+              setEditingSlot(slot);
+              setSlotFormOpen(true);
+            }}
+            onSlotsChanged={invalidate}
+          />
+        </div>
       </div>
 
       {selectedDay && (
