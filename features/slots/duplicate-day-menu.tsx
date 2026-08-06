@@ -6,6 +6,7 @@ import {
   duplicateSameWeekdayInMonth,
   duplicateWeekdaysInMonth,
 } from "@/features/slots/actions";
+import { getClientTimeZoneOffsetMinutes } from "@/lib/utils/dates";
 
 export function DuplicateDayMenu({
   workspaceId,
@@ -27,6 +28,7 @@ export function DuplicateDayMenu({
           const result = await duplicateSameWeekdayInMonth({
             workspaceId,
             sourceDate,
+            timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
           });
           if (!result.ok) {
             toast.error(result.error);
@@ -47,6 +49,7 @@ export function DuplicateDayMenu({
           const result = await duplicateWeekdaysInMonth({
             workspaceId,
             sourceDate,
+            timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
           });
           if (!result.ok) {
             toast.error(result.error);

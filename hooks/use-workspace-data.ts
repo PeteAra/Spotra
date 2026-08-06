@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getSlotsForMonth } from "@/features/slots/actions";
 import { getWorkspaceBySlug } from "@/features/workspace/actions";
 import { listMembers, getMemberHistory } from "@/features/members/actions";
-import { monthKey } from "@/lib/utils/dates";
+import { monthKey, getClientTimeZoneOffsetMinutes } from "@/lib/utils/dates";
 
 export function useWorkspace(slug: string, enabled = true) {
   return useQuery({
@@ -20,13 +20,15 @@ export function useWorkspace(slug: string, enabled = true) {
 
 export function useSlots(workspaceId: string | undefined, month: Date) {
   const key = monthKey(month);
+  const timeZoneOffsetMinutes = getClientTimeZoneOffsetMinutes();
   return useQuery({
-    queryKey: ["slots", workspaceId, key],
+    queryKey: ["slots", workspaceId, key, timeZoneOffsetMinutes],
     enabled: Boolean(workspaceId),
     queryFn: async () => {
       const result = await getSlotsForMonth({
         workspaceId: workspaceId!,
         monthKey: key,
+        timeZoneOffsetMinutes,
       });
       if (!result.ok) throw new Error(result.error);
       return result.data;

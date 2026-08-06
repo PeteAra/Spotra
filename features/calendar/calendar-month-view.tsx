@@ -23,6 +23,7 @@ import {
 import { useInvalidateSlots, useSlots } from "@/hooks/use-workspace-data";
 import {
   getMonthGrid,
+  getClientTimeZoneOffsetMinutes,
   isInMonth,
   monthKey,
   nextMonth,
@@ -271,6 +272,7 @@ export function CalendarMonthView({
           const result = await duplicatePreviousMonth({
             workspaceId,
             targetMonthKey: monthKey(target),
+            timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
           });
           if (!result.ok) {
             toast.error(result.error);
@@ -317,6 +319,7 @@ export function CalendarMonthView({
                 const result = await deleteSlotsInMonth({
                   workspaceId,
                   monthKey: monthKey(month),
+                  timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
                 });
                 if (!result.ok) {
                   toast.error(result.error);

@@ -100,3 +100,95 @@ export function combineDateAndTime(date: Date, time: string): Date {
   result.setHours(hours, minutes, 0, 0);
   return result;
 }
+
+/** Browser offset minutes (UTC = local + offset). Positive for US timezones. */
+export function getClientTimeZoneOffsetMinutes(): number {
+  return new Date().getTimezoneOffset();
+}
+
+/**
+ * Interpret yyyy-MM-dd + HH:mm as wall-clock time in the given timezone offset,
+ * and return the corresponding absolute UTC Date.
+ * `timeZoneOffsetMinutes` matches `Date#getTimezoneOffset()` (e.g. 300 for EST).
+ */
+export function wallDateTimeToUtc(
+  date: string,
+  time: string,
+  timeZoneOffsetMinutes: number,
+): Date {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hours, minutes] = time.split(":").map(Number);
+  return new Date(
+    Date.UTC(year, month - 1, day, hours, minutes, 0, 0) +
+      timeZoneOffsetMinutes * 60_000,
+  );
+}
+
+/** Read wall-clock date/time parts from a stored UTC instant for a given offset. */
+export function utcToWallParts(
+  iso: string,
+  timeZoneOffsetMinutes: number,
+): {
+  year: number;
+  month: number;
+  day: number;
+  hours: number;
+  minutes: number;
+  date: string;
+  time: string;
+} {
+  const shifted = new Date(
+    new Date(iso).getTime() - timeZoneOffsetMinutes * 60_000,
+  );
+  const year = shifted.getUTCFullYear();
+  const month = shifted.getUTCMonth() + 1;
+  const day = shifted.getUTCDate();
+  const hours = shifted.getUTCHours();
+  const minutes = shifted.getUTCMinutes();
+  return {
+    year,
+    month,
+    day,
+    hours,
+    minutes,
+    date: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+    time: `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
+  };
+}
+
+/** Month start / exclusive end in UTC for a calendar month in the user's timezone. */
+export function monthBoundsUtc(
+  monthKeyStr: string,
+  timeZoneOffsetMinutes: number,
+): { start: string; endExclusive: string } {
+  const [year, month] = monthKeyStr.split("-").map(Number);
+  const start = new Date(
+    Date.UTC(year, month - 1, 1, 0, 0, 0, 0) + timeZoneOffsetMinutes * 60_000,
+  );
+  const endExclusive = new Date(
+    Date.UTC(year, month, 1, 0, 0, 0, 0) + timeZoneOffsetMinutes * 60_000,
+  );
+  return { start: start.toISOString(), endExclusive: endExclusive.toISOString() };
+}
+
+/** Inclusive day bounds in UTC for a yyyy-MM-dd calendar day in the user's timezone. */
+export function dayBoundsUtc(
+  date: string,
+  timeZoneOffsetMinutes: number,
+): { start: string; end: string } {
+  const [year, month, day] = date.split("-").map(Number);
+  const start = new Date(
+    Date.UTC(year, month - 1, day, 0, 0, 0, 0) + timeZoneOffsetMinutes * 60_000,
+  );
+  const end = new Date(
+    Date.UTC(year, month - 1, day, 23, 59, 59, 999) +
+      timeZoneOffsetMinutes * 60_000,
+  );
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+/** Stable noon-UTC Date for calendar math from a yyyy-MM-dd wall date. */
+export function calendarDateAtNoonUtc(date: string): Date {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+}

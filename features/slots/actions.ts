@@ -1,15 +1,18 @@
 "use server";
 
 import { unstable_noStore as noStore } from "next/cache";
-import { endOfMonth, startOfMonth } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import {
-  combineDateAndTime,
+  calendarDateAtNoonUtc,
+  dayBoundsUtc,
   mapDateToMonthByWeekdayOccurrence,
+  monthBoundsUtc,
   monthKey,
   parseMonthKey,
   previousMonth,
   sameWeekdayDatesInMonth,
+  utcToWallParts,
+  wallDateTimeToUtc,
   weekdayDatesInMonth,
 } from "@/lib/utils/dates";
 import { slotFormSchema } from "@/lib/validators";
@@ -20,11 +23,9 @@ import type {
   SlotWithReservations,
 } from "@/types";
 
-/** Build a local Date from yyyy-MM-dd + HH:mm without server TZ ambiguity. */
-function dateFromParts(date: string, time: string): Date {
-  const [year, month, day] = date.split("-").map(Number);
-  const [hours, minutes] = time.split(":").map(Number);
-  return new Date(year, month - 1, day, hours, minutes, 0, 0);
+function ymd(date: Date): string {
+  // Prefer UTC getters so noon-UTC calendar dates stay stable on any server TZ.
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 async function requireAdmin(workspaceId: string) {
@@ -80,6 +81,7 @@ function toSlotWithReservations(
 export async function getSlotsForMonth(input: {
   workspaceId: string;
   monthKey: string;
+  timeZoneOffsetMinutes: number;
 }): Promise<ActionResult<SlotWithReservations[]>> {
   noStore();
 
@@ -92,12 +94,10 @@ export async function getSlotsForMonth(input: {
     return { ok: false, error: "UNAUTHENTICATED" };
   }
 
-  const month = parseMonthKey(input.monthKey);
-  const rangeStart = startOfMonth(month).toISOString();
-  // Use exclusive upper bound at start of next month to avoid end-of-month edge cases
-  const rangeEndExclusive = startOfMonth(
-    new Date(month.getFullYear(), month.getMonth() + 1, 1),
-  ).toISOString();
+  const { start: rangeStart, endExclusive: rangeEndExclusive } = monthBoundsUtc(
+    input.monthKey,
+    input.timeZoneOffsetMinutes,
+  );
 
   const { data: slots, error } = await supabase
     .from("slots")
@@ -126,7 +126,6 @@ export async function getSlotsForMonth(input: {
     .eq("status", "claimed");
 
   if (resError) {
-    // Still return slots if roster join fails — better than an empty calendar
     console.error("reservations fetch failed", resError.message);
     return {
       ok: true,
@@ -158,6 +157,7 @@ export async function createSlot(input: {
   startTime: string;
   endTime: string;
   capacity: number;
+  timeZoneOffsetMinutes: number;
 }): Promise<ActionResult<Slot>> {
   const parsed = slotFormSchema.safeParse(input);
   if (!parsed.success) {
@@ -167,8 +167,16 @@ export async function createSlot(input: {
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
 
-  const startsAt = dateFromParts(parsed.data.date, parsed.data.startTime);
-  const endsAt = dateFromParts(parsed.data.date, parsed.data.endTime);
+  const startsAt = wallDateTimeToUtc(
+    parsed.data.date,
+    parsed.data.startTime,
+    input.timeZoneOffsetMinutes,
+  );
+  const endsAt = wallDateTimeToUtc(
+    parsed.data.date,
+    parsed.data.endTime,
+    input.timeZoneOffsetMinutes,
+  );
 
   const { data, error } = await admin.supabase
     .from("slots")
@@ -195,6 +203,7 @@ export async function updateSlot(input: {
   startTime: string;
   endTime: string;
   capacity: number;
+  timeZoneOffsetMinutes: number;
 }): Promise<ActionResult<Slot>> {
   const parsed = slotFormSchema.safeParse(input);
   if (!parsed.success) {
@@ -217,8 +226,16 @@ export async function updateSlot(input: {
     };
   }
 
-  const startsAt = dateFromParts(parsed.data.date, parsed.data.startTime);
-  const endsAt = dateFromParts(parsed.data.date, parsed.data.endTime);
+  const startsAt = wallDateTimeToUtc(
+    parsed.data.date,
+    parsed.data.startTime,
+    input.timeZoneOffsetMinutes,
+  );
+  const endsAt = wallDateTimeToUtc(
+    parsed.data.date,
+    parsed.data.endTime,
+    input.timeZoneOffsetMinutes,
+  );
 
   const { data, error } = await admin.supabase
     .from("slots")
@@ -269,21 +286,24 @@ async function copySlotsToDates(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
   sourceSlots: Slot[],
-  targetDates: Date[],
+  targetDateStrs: string[],
+  timeZoneOffsetMinutes: number,
 ): Promise<number> {
-  if (sourceSlots.length === 0 || targetDates.length === 0) return 0;
+  if (sourceSlots.length === 0 || targetDateStrs.length === 0) return 0;
 
-  const rows = targetDates.flatMap((targetDate) =>
+  const rows = targetDateStrs.flatMap((targetDate) =>
     sourceSlots.map((slot) => {
-      const start = new Date(slot.starts_at);
-      const end = new Date(slot.ends_at);
-      const startsAt = combineDateAndTime(
+      const startWall = utcToWallParts(slot.starts_at, timeZoneOffsetMinutes);
+      const endWall = utcToWallParts(slot.ends_at, timeZoneOffsetMinutes);
+      const startsAt = wallDateTimeToUtc(
         targetDate,
-        `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`,
+        startWall.time,
+        timeZoneOffsetMinutes,
       );
-      const endsAt = combineDateAndTime(
+      const endsAt = wallDateTimeToUtc(
         targetDate,
-        `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`,
+        endWall.time,
+        timeZoneOffsetMinutes,
       );
 
       return {
@@ -305,19 +325,17 @@ async function copySlotsToDates(
 async function getSlotsForDay(
   supabase: Awaited<ReturnType<typeof createClient>>,
   workspaceId: string,
-  day: Date,
+  date: string,
+  timeZoneOffsetMinutes: number,
 ): Promise<Slot[]> {
-  const dayStart = new Date(day);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(day);
-  dayEnd.setHours(23, 59, 59, 999);
+  const { start, end } = dayBoundsUtc(date, timeZoneOffsetMinutes);
 
   const { data, error } = await supabase
     .from("slots")
     .select("*")
     .eq("workspace_id", workspaceId)
-    .gte("starts_at", dayStart.toISOString())
-    .lte("starts_at", dayEnd.toISOString())
+    .gte("starts_at", start)
+    .lte("starts_at", end)
     .order("starts_at");
 
   if (error) throw new Error(error.message);
@@ -327,23 +345,30 @@ async function getSlotsForDay(
 export async function duplicateSameWeekdayInMonth(input: {
   workspaceId: string;
   sourceDate: string;
+  timeZoneOffsetMinutes: number;
 }): Promise<ActionResult<{ created: number }>> {
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
 
   try {
-    const source = new Date(`${input.sourceDate}T12:00:00`);
-    const slots = await getSlotsForDay(admin.supabase, input.workspaceId, source);
+    const source = calendarDateAtNoonUtc(input.sourceDate);
+    const slots = await getSlotsForDay(
+      admin.supabase,
+      input.workspaceId,
+      input.sourceDate,
+      input.timeZoneOffsetMinutes,
+    );
     if (slots.length === 0) {
       return { ok: false, error: "No spots on this day to duplicate." };
     }
 
-    const targets = sameWeekdayDatesInMonth(source, source);
+    const targets = sameWeekdayDatesInMonth(source, source).map(ymd);
     const created = await copySlotsToDates(
       admin.supabase,
       admin.user!.id,
       slots,
       targets,
+      input.timeZoneOffsetMinutes,
     );
     return { ok: true, data: { created } };
   } catch (e) {
@@ -354,23 +379,30 @@ export async function duplicateSameWeekdayInMonth(input: {
 export async function duplicateWeekdaysInMonth(input: {
   workspaceId: string;
   sourceDate: string;
+  timeZoneOffsetMinutes: number;
 }): Promise<ActionResult<{ created: number }>> {
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
 
   try {
-    const source = new Date(`${input.sourceDate}T12:00:00`);
-    const slots = await getSlotsForDay(admin.supabase, input.workspaceId, source);
+    const source = calendarDateAtNoonUtc(input.sourceDate);
+    const slots = await getSlotsForDay(
+      admin.supabase,
+      input.workspaceId,
+      input.sourceDate,
+      input.timeZoneOffsetMinutes,
+    );
     if (slots.length === 0) {
       return { ok: false, error: "No spots on this day to duplicate." };
     }
 
-    const targets = weekdayDatesInMonth(source, source);
+    const targets = weekdayDatesInMonth(source, source).map(ymd);
     const created = await copySlotsToDates(
       admin.supabase,
       admin.user!.id,
       slots,
       targets,
+      input.timeZoneOffsetMinutes,
     );
     return { ok: true, data: { created } };
   } catch (e) {
@@ -381,6 +413,7 @@ export async function duplicateWeekdaysInMonth(input: {
 export async function duplicatePreviousMonth(input: {
   workspaceId: string;
   targetMonthKey: string;
+  timeZoneOffsetMinutes: number;
 }): Promise<ActionResult<{ created: number; skippedDays: number }>> {
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
@@ -388,34 +421,46 @@ export async function duplicatePreviousMonth(input: {
   try {
     const targetMonth = parseMonthKey(input.targetMonthKey);
     const sourceMonth = previousMonth(targetMonth);
+    const sourceMonthKey = monthKey(sourceMonth);
 
-    const sourceStart = startOfMonth(sourceMonth).toISOString();
-    const sourceEnd = endOfMonth(sourceMonth).toISOString();
+    const sourceBounds = monthBoundsUtc(
+      sourceMonthKey,
+      input.timeZoneOffsetMinutes,
+    );
+    const targetBounds = monthBoundsUtc(
+      input.targetMonthKey,
+      input.timeZoneOffsetMinutes,
+    );
 
     const { data: sourceSlots, error } = await admin.supabase
       .from("slots")
       .select("*")
       .eq("workspace_id", input.workspaceId)
-      .gte("starts_at", sourceStart)
-      .lte("starts_at", sourceEnd);
+      .gte("starts_at", sourceBounds.start)
+      .lt("starts_at", sourceBounds.endExclusive);
 
     if (error) return { ok: false, error: error.message };
     if (!sourceSlots?.length) {
       return { ok: false, error: "Previous month has no spots to copy." };
     }
 
-    const targetStart = startOfMonth(targetMonth).toISOString();
-    const targetEnd = endOfMonth(targetMonth).toISOString();
     const { data: existing } = await admin.supabase
       .from("slots")
       .select("starts_at")
       .eq("workspace_id", input.workspaceId)
-      .gte("starts_at", targetStart)
-      .lte("starts_at", targetEnd);
+      .gte("starts_at", targetBounds.start)
+      .lt("starts_at", targetBounds.endExclusive);
 
     const occupiedDays = new Set(
-      (existing ?? []).map((s) => monthKey(new Date(s.starts_at)) + "-" + new Date(s.starts_at).getDate()),
+      (existing ?? []).map((s) => {
+        const wall = utcToWallParts(s.starts_at, input.timeZoneOffsetMinutes);
+        return wall.date;
+      }),
     );
+
+    // Anchor target month as noon-UTC on the 1st for weekday mapping math.
+    const [ty, tm] = input.targetMonthKey.split("-").map(Number);
+    const targetMonthNoon = new Date(Date.UTC(ty, tm - 1, 1, 12, 0, 0, 0));
 
     const rows: Array<{
       workspace_id: string;
@@ -428,28 +473,30 @@ export async function duplicatePreviousMonth(input: {
     let skippedDays = 0;
 
     for (const slot of sourceSlots as Slot[]) {
-      const sourceDate = new Date(slot.starts_at);
-      const mapped = mapDateToMonthByWeekdayOccurrence(sourceDate, targetMonth);
+      const sourceWall = utcToWallParts(slot.starts_at, input.timeZoneOffsetMinutes);
+      const endWall = utcToWallParts(slot.ends_at, input.timeZoneOffsetMinutes);
+      const sourceDate = calendarDateAtNoonUtc(sourceWall.date);
+      const mapped = mapDateToMonthByWeekdayOccurrence(sourceDate, targetMonthNoon);
       if (!mapped) {
         skippedDays += 1;
         continue;
       }
 
-      const dayKey = monthKey(mapped) + "-" + mapped.getDate();
-      if (occupiedDays.has(dayKey)) {
+      const mappedDate = ymd(mapped);
+      if (occupiedDays.has(mappedDate)) {
         skippedDays += 1;
         continue;
       }
 
-      const start = new Date(slot.starts_at);
-      const end = new Date(slot.ends_at);
-      const startsAt = combineDateAndTime(
-        mapped,
-        `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`,
+      const startsAt = wallDateTimeToUtc(
+        mappedDate,
+        sourceWall.time,
+        input.timeZoneOffsetMinutes,
       );
-      const endsAt = combineDateAndTime(
-        mapped,
-        `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`,
+      const endsAt = wallDateTimeToUtc(
+        mappedDate,
+        endWall.time,
+        input.timeZoneOffsetMinutes,
       );
 
       rows.push({
@@ -460,6 +507,7 @@ export async function duplicatePreviousMonth(input: {
         capacity: slot.capacity,
         created_by: admin.user!.id,
       });
+      occupiedDays.add(mappedDate);
     }
 
     if (rows.length === 0) {
@@ -484,20 +532,22 @@ export async function duplicatePreviousMonth(input: {
 export async function deleteSlotsInMonth(input: {
   workspaceId: string;
   monthKey: string;
+  timeZoneOffsetMinutes: number;
 }): Promise<ActionResult<{ deleted: number; skipped: number }>> {
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
 
-  const month = parseMonthKey(input.monthKey);
-  const rangeStart = startOfMonth(month).toISOString();
-  const rangeEnd = endOfMonth(month).toISOString();
+  const { start: rangeStart, endExclusive } = monthBoundsUtc(
+    input.monthKey,
+    input.timeZoneOffsetMinutes,
+  );
 
   const { data: slots, error } = await admin.supabase
     .from("slots")
     .select("id")
     .eq("workspace_id", input.workspaceId)
     .gte("starts_at", rangeStart)
-    .lte("starts_at", rangeEnd);
+    .lt("starts_at", endExclusive);
 
   if (error) return { ok: false, error: error.message };
 

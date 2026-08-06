@@ -16,7 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createSlot, updateSlot } from "@/features/slots/actions";
+import {
+  addOneHour,
+  snapToQuarterHour,
+  TimeSelect,
+} from "@/features/slots/time-select";
 import { slotColorFromTitle } from "@/lib/utils/slot-color";
+import { getClientTimeZoneOffsetMinutes } from "@/lib/utils/dates";
 import { slotFormSchema, type SlotFormInput } from "@/lib/validators";
 import type { SlotWithReservations } from "@/types";
 
@@ -57,8 +63,8 @@ export function SlotFormDialog({
       form.reset({
         title: slot.title ?? "",
         date: format(start, "yyyy-MM-dd"),
-        startTime: format(start, "HH:mm"),
-        endTime: format(end, "HH:mm"),
+        startTime: snapToQuarterHour(format(start, "HH:mm")),
+        endTime: snapToQuarterHour(format(end, "HH:mm")),
         capacity: slot.capacity,
       });
     } else {
@@ -85,9 +91,14 @@ export function SlotFormDialog({
               ? await updateSlot({
                   slotId: slot.id,
                   workspaceId,
+                  timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
                   ...values,
                 })
-              : await createSlot({ workspaceId, ...values });
+              : await createSlot({
+                  workspaceId,
+                  timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
+                  ...values,
+                });
 
             if (!result.ok) {
               toast.error(result.error);
@@ -122,11 +133,33 @@ export function SlotFormDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="startTime">Start</Label>
-              <Input id="startTime" type="time" {...form.register("startTime")} />
+              <TimeSelect
+                id="startTime"
+                value={form.watch("startTime")}
+                onChange={(value) => {
+                  form.setValue("startTime", value, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  });
+                  form.setValue("endTime", addOneHour(value), {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  });
+                }}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="endTime">End</Label>
-              <Input id="endTime" type="time" {...form.register("endTime")} />
+              <TimeSelect
+                id="endTime"
+                value={form.watch("endTime")}
+                onChange={(value) =>
+                  form.setValue("endTime", value, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  })
+                }
+              />
             </div>
           </div>
           {form.formState.errors.endTime && (
