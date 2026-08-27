@@ -66,6 +66,8 @@ export function SlotFormDialog({
       startTime: "09:00",
       endTime: "09:30",
       capacity: 1,
+      commentsEnabled: false,
+      commentsRequired: false,
       colorKey: null,
       repeat: "none",
     },
@@ -74,6 +76,7 @@ export function SlotFormDialog({
   const watchedTitle = form.watch("title");
   const watchedColorKey = form.watch("colorKey");
   const watchedRepeat = form.watch("repeat");
+  const watchedCommentsEnabled = form.watch("commentsEnabled");
   const previewColor = resolveSlotColor(watchedTitle, watchedColorKey ?? null);
   const isAutoColor = !watchedColorKey;
   const weekdayLabel = format(day, "EEEE");
@@ -106,6 +109,8 @@ export function SlotFormDialog({
         startTime: snapToTimeStep(format(start, "HH:mm")),
         endTime: snapToTimeStep(format(end, "HH:mm")),
         capacity: slot.capacity,
+        commentsEnabled: slot.comments_enabled,
+        commentsRequired: slot.comments_required,
         colorKey: isSlotColorKey(slot.color_key) ? slot.color_key : null,
         repeat: "none",
       });
@@ -116,6 +121,8 @@ export function SlotFormDialog({
         startTime: "09:00",
         endTime: "09:30",
         capacity: 1,
+        commentsEnabled: false,
+        commentsRequired: false,
         colorKey: null,
         repeat: "none",
       });
@@ -348,6 +355,61 @@ export function SlotFormDialog({
               Default is 1. Use 0 to block this time (no one can claim). Set
               higher when multiple people can share the spot.
             </p>
+          </div>
+
+          <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]/40 p-3">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-[var(--border)] accent-[var(--accent)]"
+                checked={watchedCommentsEnabled}
+                onChange={(event) => {
+                  const enabled = event.target.checked;
+                  form.setValue("commentsEnabled", enabled, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  });
+                  if (!enabled) {
+                    form.setValue("commentsRequired", false, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                  }
+                }}
+              />
+              <span className="space-y-1">
+                <span className="block text-sm font-medium">
+                  Allow comments when claiming
+                </span>
+                <span className="block text-xs text-[var(--muted)]">
+                  Participants can leave a short note when they claim this spot.
+                </span>
+              </span>
+            </label>
+
+            {watchedCommentsEnabled ? (
+              <label className="flex cursor-pointer items-start gap-3 pl-7">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-[var(--border)] accent-[var(--accent)]"
+                  checked={form.watch("commentsRequired")}
+                  onChange={(event) =>
+                    form.setValue("commentsRequired", event.target.checked, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                />
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">
+                    Require a comment
+                  </span>
+                  <span className="block text-xs text-[var(--muted)]">
+                    When on, claimers must enter at least 3 characters.
+                  </span>
+                </span>
+              </label>
+            ) : null}
           </div>
           <input type="hidden" {...form.register("date")} />
           <DialogFooter>

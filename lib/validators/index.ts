@@ -31,13 +31,23 @@ export const slotFormSchema = z
       .regex(/^\d{2}:\d{2}(:\d{2})?$/, "Invalid end time")
       .transform((t) => t.slice(0, 5)),
     capacity: z.coerce.number().int().min(0).max(100),
+    commentsEnabled: z.boolean(),
+    commentsRequired: z.boolean(),
     colorKey: z.enum(slotColorKeys).nullable().optional(),
     repeat: z.enum(slotRepeatRules),
   })
   .refine((data) => data.endTime > data.startTime, {
     message: "End time must be after start time",
     path: ["endTime"],
+  })
+  .refine((data) => !data.commentsRequired || data.commentsEnabled, {
+    message: "Enable claim comments before requiring them",
+    path: ["commentsRequired"],
   });
+
+export const claimCommentSchema = z.object({
+  comment: z.string().trim().max(500, "Comment must be 500 characters or fewer"),
+});
 
 export const cancelReasonSchema = z.object({
   reason: z
@@ -49,4 +59,5 @@ export const cancelReasonSchema = z.object({
 
 export type WorkspaceTitleInput = z.infer<typeof workspaceTitleSchema>;
 export type SlotFormInput = z.infer<typeof slotFormSchema>;
+export type ClaimCommentInput = z.infer<typeof claimCommentSchema>;
 export type CancelReasonInput = z.infer<typeof cancelReasonSchema>;

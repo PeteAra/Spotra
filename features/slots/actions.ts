@@ -74,6 +74,8 @@ function toSlotWithReservations(
 
   return {
     ...slot,
+    comments_enabled: slot.comments_enabled ?? false,
+    comments_required: slot.comments_required ?? false,
     reservations: claimed,
     claimed_count,
     availability,
@@ -310,6 +312,9 @@ export async function createSlot(input: {
       starts_at: startsAt.toISOString(),
       ends_at: endsAt.toISOString(),
       capacity: parsed.data.capacity,
+      comments_enabled: parsed.data.commentsEnabled,
+      comments_required:
+        parsed.data.commentsEnabled && parsed.data.commentsRequired,
       created_by: admin.user!.id,
     };
   });
@@ -500,6 +505,9 @@ export async function updateSlot(input: {
       starts_at: startsAt.toISOString(),
       ends_at: endsAt.toISOString(),
       capacity: parsed.data.capacity,
+      comments_enabled: parsed.data.commentsEnabled,
+      comments_required:
+        parsed.data.commentsEnabled && parsed.data.commentsRequired,
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.slotId)
@@ -550,6 +558,9 @@ export async function updateSlot(input: {
           starts_at: extraStart.toISOString(),
           ends_at: extraEnd.toISOString(),
           capacity: parsed.data.capacity,
+          comments_enabled: parsed.data.commentsEnabled,
+          comments_required:
+            parsed.data.commentsEnabled && parsed.data.commentsRequired,
           created_by: admin.user!.id,
         };
       });
@@ -688,6 +699,8 @@ async function copySlotsToDates(
         starts_at: startsAt.toISOString(),
         ends_at: endsAt.toISOString(),
         capacity: slot.capacity,
+        comments_enabled: slot.comments_enabled,
+        comments_required: slot.comments_required,
         created_by: userId,
       };
     }),
@@ -814,6 +827,8 @@ export async function duplicatePreviousMonth(input: {
       starts_at: string;
       ends_at: string;
       capacity: number;
+      comments_enabled: boolean;
+      comments_required: boolean;
       created_by: string;
     }> = [];
     let unmapped = 0;
@@ -847,6 +862,8 @@ export async function duplicatePreviousMonth(input: {
         starts_at: startsAt.toISOString(),
         ends_at: endsAt.toISOString(),
         capacity: slot.capacity,
+        comments_enabled: slot.comments_enabled,
+        comments_required: slot.comments_required,
         created_by: admin.user!.id,
       });
     }

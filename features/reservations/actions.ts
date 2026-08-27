@@ -12,6 +12,12 @@ function mapClaimError(message: string): string {
   if (message.includes("SLOT_NOT_FOUND")) return "Spot not found.";
   if (message.includes("NOT_A_MEMBER")) return "Join this workspace first.";
   if (message.includes("NOT_AUTHENTICATED")) return "Please sign in.";
+  if (message.includes("COMMENT_REQUIRED")) {
+    return "Please enter at least 3 characters.";
+  }
+  if (message.includes("COMMENT_TOO_LONG")) {
+    return "Comment must be 500 characters or fewer.";
+  }
   return message;
 }
 
@@ -29,6 +35,7 @@ function mapCancelError(message: string): string {
 
 export async function claimSlot(input: {
   slotId: string;
+  claimComment?: string;
   timeZoneOffsetMinutes: number;
 }): Promise<ActionResult<Reservation>> {
   const supabase = await createClient();
@@ -42,6 +49,7 @@ export async function claimSlot(input: {
 
   const { data, error } = await supabase.rpc("claim_slot", {
     p_slot_id: input.slotId,
+    p_claim_comment: input.claimComment ?? null,
   });
 
   if (error) {

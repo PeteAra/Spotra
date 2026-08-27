@@ -1,9 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { MessageSquare, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  countSlotComments,
+  SlotCommentsDialog,
+} from "@/features/calendar/slot-comments-dialog";
 import { SlotClaimToast } from "@/features/reservations/slot-claim-toast";
 import { SlotCancelToast } from "@/features/reservations/slot-cancel-toast";
 import { deleteSlot } from "@/features/slots/actions";
@@ -27,6 +31,7 @@ export function SlotBlock({
 }) {
   const [claimOpen, setClaimOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const [activeReservation, setActiveReservation] = useState<Reservation | null>(
     null,
   );
@@ -34,6 +39,7 @@ export function SlotBlock({
   const ownReservation = slot.reservations.find(
     (r) => r.account_id === accountId,
   );
+  const commentCount = countSlotComments(slot.reservations);
   const isFull = slot.availability === "full";
   const isBlocked = slot.availability === "blocked";
   const isClosed = isFull || isBlocked;
@@ -124,11 +130,33 @@ export function SlotBlock({
         </button>
 
         <div className="flex shrink-0 items-center gap-0.5">
+          {slot.comments_enabled && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative h-7 w-7"
+              title={
+                commentCount > 0
+                  ? `${commentCount} comment${commentCount === 1 ? "" : "s"}`
+                  : "View comments"
+              }
+              onClick={() => setCommentsOpen(true)}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              {commentCount > 0 ? (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[9px] font-semibold text-[var(--accent-foreground)]">
+                  {commentCount}
+                </span>
+              ) : null}
+            </Button>
+          )}
           {canClaim && (
             <SlotClaimToast
               open={claimOpen}
               onOpenChange={setClaimOpen}
               slotId={slot.id}
+              commentsEnabled={slot.comments_enabled}
+              commentsRequired={slot.comments_required}
               onClaimed={onChanged}
             >
               <Button
@@ -213,6 +241,14 @@ export function SlotBlock({
           onCancelled={onChanged}
         />
       )}
+
+      <SlotCommentsDialog
+        open={commentsOpen}
+        onOpenChange={setCommentsOpen}
+        slotTitle={title ?? null}
+        reservations={slot.reservations}
+        accountId={accountId}
+      />
     </div>
   );
 }
