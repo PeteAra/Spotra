@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
@@ -16,7 +16,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createSlot, updateSlot } from "@/features/slots/actions";
+import { EditRecurringSpotsDialog } from "@/features/slots/edit-recurring-spots-dialog";
+import {
+  countSameTitleSlots,
+  createSlot,
+  updateSlot,
+  type SlotEditScope,
+} from "@/features/slots/actions";
 import {
   addOneHour,
   snapToTimeStep,
@@ -58,6 +64,10 @@ export function SlotFormDialog({
   slot: SlotWithReservations | null;
   onSaved: () => void | Promise<void>;
 }) {
+  const [scopeOpen, setScopeOpen] = useState(false);
+  const [pendingValues, setPendingValues] = useState<SlotFormInput | null>(null);
+  const [saving, setSaving] = useState(false);
+
   const form = useForm<SlotFormInput>({
     resolver: zodResolver(slotFormSchema),
     defaultValues: {
@@ -133,8 +143,68 @@ export function SlotFormDialog({
     form.setValue("colorKey", key, { shouldDirty: true, shouldValidate: true });
   }
 
+  function toastUpdateResult(result: {
+    createdAdditional: number;
+    skipped: number;
+    updatedCount: number;
+  }) {
+    if (result.createdAdditional > 0) {
+      toast.success(
+        `Updated ${result.updatedCount} spot${result.updatedCount === 1 ? "" : "s"} and created ${result.createdAdditional} more` +
+          (result.skipped
+            ? ` (${result.skipped} skipped — same title at overlapping times)`
+            : ""),
+      );
+    } else if (result.updatedCount > 1) {
+      toast.success(
+        `Updated ${result.updatedCount} spots` +
+          (result.skipped
+            ? ` (${result.skipped} same-title overlaps skipped)`
+            : ""),
+      );
+    } else if (result.skipped > 0) {
+      toast.success(
+        `Time slot updated (${result.skipped} same-title overlaps skipped)`,
+      );
+    } else {
+      toast.success("Time slot updated");
+    }
+  }
+
+  async function saveEdit(values: SlotFormInput, editScope: SlotEditScope) {
+    if (!slot) return;
+    setSaving(true);
+    const result = await updateSlot({
+      slotId: slot.id,
+      workspaceId,
+      timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
+      editScope,
+      ...values,
+    });
+    setSaving(false);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toastUpdateResult(result.data);
+    setScopeOpen(false);
+    setPendingValues(null);
+    onOpenChange(false);
+    await onSaved();
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          setScopeOpen(false);
+          setPendingValues(null);
+        }
+        onOpenChange(next);
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{slot ? "Edit time slot" : "Create time slot"}</DialogTitle>
@@ -143,51 +213,42 @@ export function SlotFormDialog({
           className="space-y-4"
           onSubmit={form.handleSubmit(async (values) => {
             if (slot) {
-              const result = await updateSlot({
-                slotId: slot.id,
+              const related = await countSameTitleSlots({
                 workspaceId,
-                timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
-                ...values,
+                title: slot.title ?? "",
               });
-              if (!result.ok) {
-                toast.error(result.error);
+              if (!related.ok) {
+                toast.error(related.error);
                 return;
               }
-              if (result.data.createdAdditional > 0) {
-                toast.success(
-                  `Updated slot and created ${result.data.createdAdditional} more` +
+              if (related.data > 1) {
+                setPendingValues(values);
+                setScopeOpen(true);
+                return;
+              }
+              await saveEdit(values, "this");
+              return;
+            }
+
+            const result = await createSlot({
+              workspaceId,
+              timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
+              ...values,
+            });
+            if (!result.ok) {
+              toast.error(result.error);
+              return;
+            }
+            toast.success(
+              result.data.created > 1
+                ? `Created ${result.data.created} time slots` +
                     (result.data.skipped
                       ? ` (${result.data.skipped} skipped — same title at overlapping times)`
-                      : ""),
-                );
-              } else if (result.data.skipped > 0) {
-                toast.success(
-                  `Time slot updated (${result.data.skipped} same-title overlaps skipped)`,
-                );
-              } else {
-                toast.success("Time slot updated");
-              }
-            } else {
-              const result = await createSlot({
-                workspaceId,
-                timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
-                ...values,
-              });
-              if (!result.ok) {
-                toast.error(result.error);
-                return;
-              }
-              toast.success(
-                result.data.created > 1
-                  ? `Created ${result.data.created} time slots` +
-                      (result.data.skipped
-                        ? ` (${result.data.skipped} skipped — same title at overlapping times)`
-                        : "")
-                  : result.data.skipped
-                    ? "Time slot created (some same-title overlaps were skipped)"
-                    : "Time slot created",
-              );
-            }
+                      : "")
+                : result.data.skipped
+                  ? "Time slot created (some same-title overlaps were skipped)"
+                  : "Time slot created",
+            );
             onOpenChange(false);
             await onSaved();
           })}
@@ -413,12 +474,29 @@ export function SlotFormDialog({
           </div>
           <input type="hidden" {...form.register("date")} />
           <DialogFooter>
-            <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? "Saving…" : "Save time slot"}
+            <Button
+              type="submit"
+              disabled={form.formState.isSubmitting || saving}
+            >
+              {form.formState.isSubmitting || saving ? "Saving…" : "Save time slot"}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+
+    <EditRecurringSpotsDialog
+      open={scopeOpen}
+      loading={saving}
+      onOpenChange={(next) => {
+        setScopeOpen(next);
+        if (!next) setPendingValues(null);
+      }}
+      onConfirm={async (scope) => {
+        if (!pendingValues) return;
+        await saveEdit(pendingValues, scope);
+      }}
+    />
+    </>
   );
 }

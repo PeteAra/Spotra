@@ -1,16 +1,13 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getMyAccount } from "@/features/workspace/actions";
 import { WorkspacesPageClient } from "@/features/workspace/workspaces-page-client";
 
 export default async function WorkspacesPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const accountResult = await getMyAccount();
 
-  if (!user) {
+  if (!accountResult.ok) {
     redirect("/");
   }
 
-  return <WorkspacesPageClient />;
+  return <WorkspacesPageClient account={accountResult.data} />;
 }

@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { LayoutGrid, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,8 +23,9 @@ import {
   listMyWorkspaces,
 } from "@/features/workspace/actions";
 import { SignOutButton } from "@/features/auth/sign-out-button";
+import type { Account } from "@/types";
 
-export function WorkspacesPageClient() {
+export function WorkspacesPageClient({ account }: { account: Account }) {
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{
@@ -64,15 +66,33 @@ export function WorkspacesPageClient() {
             {isFetching && !isLoading ? " Updating…" : ""}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" asChild>
-            <Link href="/">Home</Link>
-          </Button>
-          <SignOutButton />
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" />
-            New workspace
-          </Button>
+        <div className="flex flex-col items-stretch gap-3 sm:items-end">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" asChild>
+              <Link href="/">Home</Link>
+            </Button>
+            <SignOutButton />
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              New workspace
+            </Button>
+          </div>
+          <div className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 sm:min-w-[14rem]">
+            <Avatar className="h-10 w-10">
+              <AvatarImage src={account.avatar_url ?? undefined} />
+              <AvatarFallback>
+                {account.display_name.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">
+                {account.display_name}
+              </p>
+              <p className="truncate text-xs text-[var(--muted)]">
+                {account.email}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { workspaceTitleSchema } from "@/lib/validators";
 import { maybeSendWelcomeEmail } from "@/lib/notifications";
 import { slugify, withSlugSuffix } from "@/lib/utils/slugify";
-import type { ActionResult, Workspace, WorkspaceGate } from "@/types";
+import type { Account, ActionResult, Workspace, WorkspaceGate } from "@/types";
 
 async function ensureAccount() {
   noStore();
@@ -45,6 +45,30 @@ async function ensureAccount() {
   });
 
   return { supabase, user, accountId: user.id };
+}
+
+export async function getMyAccount(): Promise<ActionResult<Account>> {
+  noStore();
+  const { supabase, user, accountId } = await ensureAccount();
+  if (!user || !accountId) {
+    return { ok: false, error: "UNAUTHENTICATED" };
+  }
+
+  const { data, error } = await supabase
+    .from("accounts")
+    .select("id, email, display_name, avatar_url, created_at, updated_at")
+    .eq("id", accountId)
+    .maybeSingle();
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  if (!data) {
+    return { ok: false, error: "Account not found." };
+  }
+
+  return { ok: true, data: data as Account };
 }
 
 export async function createWorkspace(input: {

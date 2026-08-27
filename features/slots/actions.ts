@@ -236,6 +236,35 @@ async function getSlotsInTimeRange(
   }));
 }
 
+export type SlotEditScope = "this" | "following" | "all";
+
+export async function countSameTitleSlots(input: {
+  workspaceId: string;
+  title: string;
+}): Promise<ActionResult<number>> {
+  noStore();
+  const admin = await requireAdmin(input.workspaceId);
+  if (!admin.ok) return { ok: false, error: admin.error };
+
+  const normalized = normalizeSlotTitle(input.title);
+  if (!normalized) {
+    return { ok: true, data: 0 };
+  }
+
+  const { data, error } = await admin.supabase
+    .from("slots")
+    .select("id, title")
+    .eq("workspace_id", input.workspaceId);
+
+  if (error) return { ok: false, error: error.message };
+
+  const count = (data ?? []).filter(
+    (row) => normalizeSlotTitle(row.title) === normalized,
+  ).length;
+
+  return { ok: true, data: count };
+}
+
 /** Apply a color choice to every time slot in the workspace with the same title. */
 async function syncColorForTitle(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -432,9 +461,15 @@ export async function updateSlot(input: {
   capacity: number;
   colorKey?: string | null;
   repeat?: "none" | "daily" | "weekly" | "weekdays" | "weekends";
+  editScope?: SlotEditScope;
   timeZoneOffsetMinutes: number;
 }): Promise<
-  ActionResult<{ slot: Slot; createdAdditional: number; skipped: number }>
+  ActionResult<{
+    slot: Slot;
+    createdAdditional: number;
+    skipped: number;
+    updatedCount: number;
+  }>
 > {
   const parsed = slotFormSchema.safeParse(input);
   if (!parsed.success) {
@@ -444,52 +479,136 @@ export async function updateSlot(input: {
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
 
-  const { count } = await admin.supabase
-    .from("reservations")
-    .select("*", { count: "exact", head: true })
-    .eq("slot_id", input.slotId)
-    .eq("status", "claimed");
+  const { data: currentSlot, error: currentError } = await admin.supabase
+    .from("slots")
+    .select("*")
+    .eq("id", input.slotId)
+    .eq("workspace_id", input.workspaceId)
+    .maybeSingle();
 
-  if ((count ?? 0) > parsed.data.capacity) {
-    return {
-      ok: false,
-      error: `Cannot lower capacity below ${count} active claims.`,
-    };
+  if (currentError) return { ok: false, error: currentError.message };
+  if (!currentSlot) return { ok: false, error: "Spot not found." };
+
+  const editScope: SlotEditScope = input.editScope ?? "this";
+  const originalTitle = normalizeSlotTitle(currentSlot.title);
+
+  let targets: Slot[] = [currentSlot as Slot];
+
+  if (editScope !== "this" && originalTitle) {
+    const { data: siblings, error: siblingsError } = await admin.supabase
+      .from("slots")
+      .select("*")
+      .eq("workspace_id", input.workspaceId);
+
+    if (siblingsError) return { ok: false, error: siblingsError.message };
+
+    const sameTitle = ((siblings ?? []) as Slot[]).filter(
+      (slot) => normalizeSlotTitle(slot.title) === originalTitle,
+    );
+
+    if (editScope === "following") {
+      targets = sameTitle.filter(
+        (slot) => slot.starts_at >= currentSlot.starts_at,
+      );
+    } else {
+      targets = sameTitle;
+    }
+
+    if (!targets.some((slot) => slot.id === input.slotId)) {
+      targets = [currentSlot as Slot, ...targets];
+    }
   }
 
-  const startsAt = wallDateTimeToUtc(
-    parsed.data.date,
-    parsed.data.startTime,
-    input.timeZoneOffsetMinutes,
-  );
-  const endsAt = wallDateTimeToUtc(
-    parsed.data.date,
-    parsed.data.endTime,
-    input.timeZoneOffsetMinutes,
-  );
+  const targetIds = new Set(targets.map((slot) => slot.id));
 
-  try {
-    const existing = await getSlotsInTimeRange(
-      admin.supabase,
-      input.workspaceId,
-      startsAt.toISOString(),
-      endsAt.toISOString(),
-      input.slotId,
-    );
-    if (
-      existing.some((slot) =>
-        isDuplicateTitleSlot(slot, {
-          title: parsed.data.title,
-          starts_at: startsAt.toISOString(),
-          ends_at: endsAt.toISOString(),
-        }),
-      )
-    ) {
+  const { data: claimRows, error: claimError } = await admin.supabase
+    .from("reservations")
+    .select("slot_id")
+    .in("slot_id", [...targetIds])
+    .eq("status", "claimed");
+
+  if (claimError) return { ok: false, error: claimError.message };
+
+  const claimCounts = new Map<string, number>();
+  for (const row of claimRows ?? []) {
+    claimCounts.set(row.slot_id, (claimCounts.get(row.slot_id) ?? 0) + 1);
+  }
+
+  for (const target of targets) {
+    const claims = claimCounts.get(target.id) ?? 0;
+    if (claims > parsed.data.capacity) {
       return {
         ok: false,
-        error: "A time slot with this title already exists at that time.",
+        error: `Cannot lower capacity below ${claims} active claims on one of the selected spots.`,
       };
     }
+  }
+
+  type PlannedUpdate = {
+    id: string;
+    starts_at: string;
+    ends_at: string;
+  };
+
+  const planned: PlannedUpdate[] = targets.map((target) => {
+    if (target.id === input.slotId) {
+      const startsAt = wallDateTimeToUtc(
+        parsed.data.date,
+        parsed.data.startTime,
+        input.timeZoneOffsetMinutes,
+      );
+      const endsAt = wallDateTimeToUtc(
+        parsed.data.date,
+        parsed.data.endTime,
+        input.timeZoneOffsetMinutes,
+      );
+      return {
+        id: target.id,
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+      };
+    }
+
+    const wall = utcToWallParts(target.starts_at, input.timeZoneOffsetMinutes);
+    const startsAt = wallDateTimeToUtc(
+      wall.date,
+      parsed.data.startTime,
+      input.timeZoneOffsetMinutes,
+    );
+    const endsAt = wallDateTimeToUtc(
+      wall.date,
+      parsed.data.endTime,
+      input.timeZoneOffsetMinutes,
+    );
+    return {
+      id: target.id,
+      starts_at: startsAt.toISOString(),
+      ends_at: endsAt.toISOString(),
+    };
+  });
+
+  const plannedById = new Map(planned.map((row) => [row.id, row]));
+
+  const rangeStart = planned.reduce(
+    (min, row) => (row.starts_at < min ? row.starts_at : min),
+    planned[0]!.starts_at,
+  );
+  const rangeEnd = planned.reduce(
+    (max, row) => (row.ends_at > max ? row.ends_at : max),
+    planned[0]!.ends_at,
+  );
+
+  let existingWithIds: Array<SlotInterval & { id: string }>;
+  try {
+    const { data, error } = await admin.supabase
+      .from("slots")
+      .select("id, title, starts_at, ends_at")
+      .eq("workspace_id", input.workspaceId)
+      .lt("starts_at", rangeEnd)
+      .gt("ends_at", rangeStart);
+
+    if (error) throw new Error(error.message);
+    existingWithIds = (data ?? []) as Array<SlotInterval & { id: string }>;
   } catch (e) {
     return {
       ok: false,
@@ -497,37 +616,87 @@ export async function updateSlot(input: {
     };
   }
 
-  const { data, error } = await admin.supabase
-    .from("slots")
-    .update({
-      title: parsed.data.title,
-      color_key: parsed.data.colorKey ?? null,
-      starts_at: startsAt.toISOString(),
-      ends_at: endsAt.toISOString(),
-      capacity: parsed.data.capacity,
-      comments_enabled: parsed.data.commentsEnabled,
-      comments_required:
-        parsed.data.commentsEnabled && parsed.data.commentsRequired,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", input.slotId)
-    .select("*")
-    .single();
+  for (const plan of planned) {
+    const colliding = existingWithIds.some((slot) => {
+      if (targetIds.has(slot.id)) return false;
+      return isDuplicateTitleSlot(slot, {
+        title: parsed.data.title,
+        starts_at: plan.starts_at,
+        ends_at: plan.ends_at,
+      });
+    });
+    if (colliding) {
+      return {
+        ok: false,
+        error: "A time slot with this title already exists at that time.",
+      };
+    }
 
-  if (error) return { ok: false, error: slotWriteErrorMessage(error.message) };
+    for (const other of planned) {
+      if (other.id === plan.id) continue;
+      if (
+        isDuplicateTitleSlot(
+          {
+            title: parsed.data.title,
+            starts_at: other.starts_at,
+            ends_at: other.ends_at,
+          },
+          {
+            title: parsed.data.title,
+            starts_at: plan.starts_at,
+            ends_at: plan.ends_at,
+          },
+        )
+      ) {
+        return {
+          ok: false,
+          error:
+            "Those times would overlap another selected spot with the same title.",
+        };
+      }
+    }
+  }
 
-  try {
-    await syncColorForTitle(
-      admin.supabase,
-      input.workspaceId,
-      parsed.data.title,
-      parsed.data.colorKey ?? null,
-    );
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : "Could not sync title colors.",
-    };
+  const sharedFields = {
+    title: parsed.data.title,
+    color_key: parsed.data.colorKey ?? null,
+    capacity: parsed.data.capacity,
+    comments_enabled: parsed.data.commentsEnabled,
+    comments_required:
+      parsed.data.commentsEnabled && parsed.data.commentsRequired,
+    updated_at: new Date().toISOString(),
+  };
+
+  for (const target of targets) {
+    const plan = plannedById.get(target.id)!;
+    const { error } = await admin.supabase
+      .from("slots")
+      .update({
+        ...sharedFields,
+        starts_at: plan.starts_at,
+        ends_at: plan.ends_at,
+      })
+      .eq("id", target.id);
+
+    if (error) return { ok: false, error: slotWriteErrorMessage(error.message) };
+  }
+
+  // Keep title-wide color sync when editing a single spot (existing behavior).
+  // Multi-spot scopes already wrote color_key on each selected spot.
+  if (editScope === "this") {
+    try {
+      await syncColorForTitle(
+        admin.supabase,
+        input.workspaceId,
+        parsed.data.title,
+        parsed.data.colorKey ?? null,
+      );
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : "Could not sync title colors.",
+      };
+    }
   }
 
   let createdAdditional = 0;
@@ -565,11 +734,11 @@ export async function updateSlot(input: {
         };
       });
 
-      const rangeStart = candidates.reduce(
+      const extraRangeStart = candidates.reduce(
         (min, row) => (row.starts_at < min ? row.starts_at : min),
         candidates[0]!.starts_at,
       );
-      const rangeEnd = candidates.reduce(
+      const extraRangeEnd = candidates.reduce(
         (max, row) => (row.ends_at > max ? row.ends_at : max),
         candidates[0]!.ends_at,
       );
@@ -578,8 +747,8 @@ export async function updateSlot(input: {
         const existingExtras = await getSlotsInTimeRange(
           admin.supabase,
           input.workspaceId,
-          rangeStart,
-          rangeEnd,
+          extraRangeStart,
+          extraRangeEnd,
         );
         const { kept: rows, skipped: skippedExtras } = filterNonDuplicateTitleSlots(
           candidates,
@@ -617,9 +786,10 @@ export async function updateSlot(input: {
   return {
     ok: true,
     data: {
-      slot: (fresh ?? data) as Slot,
+      slot: (fresh ?? (currentSlot as Slot)) as Slot,
       createdAdditional,
       skipped,
+      updatedCount: targets.length,
     },
   };
 }
