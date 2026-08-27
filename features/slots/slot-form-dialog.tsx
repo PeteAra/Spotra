@@ -394,10 +394,10 @@ export function SlotFormDialog({
             <p className="text-xs text-[var(--muted)]">
               {watchedRepeat && watchedRepeat !== "none"
                 ? slot
-                  ? `Updates this slot and creates ${repeatCount - 1} more through the end of ${monthLabel}. Same title at overlapping times is skipped.`
-                  : `Creates ${repeatCount} time slot${repeatCount === 1 ? "" : "s"} through the end of ${monthLabel}.`
+                  ? `Updates this slot and creates ${repeatCount - 1} more through the end of ${monthLabel}. Same title at overlapping times is skipped. Repeat is only used when saving — each created spot is stored on its own (edit opens as “Does not repeat”).`
+                  : `Creates ${repeatCount} time slot${repeatCount === 1 ? "" : "s"} through the end of ${monthLabel}. Each one is saved separately; editing any of them later starts as “Does not repeat”.`
                 : slot
-                  ? "Only updates this one time slot."
+                  ? "Only updates this one time slot (unless you choose a wider scope after Save)."
                   : "Only creates this one time slot."}
             </p>
           </div>

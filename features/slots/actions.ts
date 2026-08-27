@@ -549,6 +549,18 @@ export async function updateSlot(input: {
     ends_at: string;
   };
 
+  // Original wall-clock times for the spot being edited (before this save).
+  // Used so "this and following" / "all" only retimes siblings that shared the
+  // same clock window — same title alone is not a single series.
+  const originalWallStart = utcToWallParts(
+    currentSlot.starts_at,
+    input.timeZoneOffsetMinutes,
+  );
+  const originalWallEnd = utcToWallParts(
+    currentSlot.ends_at,
+    input.timeZoneOffsetMinutes,
+  );
+
   const planned: PlannedUpdate[] = targets.map((target) => {
     if (target.id === input.slotId) {
       const startsAt = wallDateTimeToUtc(
@@ -568,14 +580,36 @@ export async function updateSlot(input: {
       };
     }
 
-    const wall = utcToWallParts(target.starts_at, input.timeZoneOffsetMinutes);
+    const siblingStart = utcToWallParts(
+      target.starts_at,
+      input.timeZoneOffsetMinutes,
+    );
+    const siblingEnd = utcToWallParts(
+      target.ends_at,
+      input.timeZoneOffsetMinutes,
+    );
+    const matchedOriginalClock =
+      siblingStart.time === originalWallStart.time &&
+      siblingEnd.time === originalWallEnd.time;
+
+    // Metadata (comments, capacity, title, color) always applies.
+    // Clock times only move for siblings that had the same start/end time
+    // as this spot before the edit — otherwise keep each spot's own schedule.
+    if (!matchedOriginalClock) {
+      return {
+        id: target.id,
+        starts_at: target.starts_at,
+        ends_at: target.ends_at,
+      };
+    }
+
     const startsAt = wallDateTimeToUtc(
-      wall.date,
+      siblingStart.date,
       parsed.data.startTime,
       input.timeZoneOffsetMinutes,
     );
     const endsAt = wallDateTimeToUtc(
-      wall.date,
+      siblingStart.date,
       parsed.data.endTime,
       input.timeZoneOffsetMinutes,
     );

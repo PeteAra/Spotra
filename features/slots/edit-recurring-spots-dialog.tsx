@@ -27,12 +27,13 @@ const OPTIONS: Array<{
     value: "following",
     label: "This and following spots",
     description:
-      "Change this spot and later spots that share the same title.",
+      "Update this spot and later spots with the same title (settings always; times only if they matched this spot’s clock).",
   },
   {
     value: "all",
     label: "All spots",
-    description: "Change every spot in this workspace with the same title.",
+    description:
+      "Update every spot with the same title (settings always; times only if they matched this spot’s clock).",
   },
 ];
 
@@ -61,8 +62,9 @@ export function EditRecurringSpotsDialog({
         <DialogHeader>
           <DialogTitle>Edit Recurring Spots</DialogTitle>
           <DialogDescription>
-            Other spots share this title. Choose which ones to update. Only one
-            option can be selected.
+            Other spots share this title. Choose which ones should get these
+            settings (comments, capacity, title, color). Times only change on
+            spots that already matched this spot&apos;s start and end time.
           </DialogDescription>
         </DialogHeader>
 
