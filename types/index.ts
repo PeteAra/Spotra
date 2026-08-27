@@ -2,6 +2,16 @@ export type WorkspaceRole = "admin" | "participant";
 export type ReservationStatus = "claimed" | "cancelled";
 export type SlotAvailability = "available" | "partial" | "full" | "blocked";
 export type SlotEditScope = "this" | "following" | "all";
+export type CalendarClosureScope = "day" | "month";
+
+export type CalendarClosure = {
+  id: string;
+  workspace_id: string;
+  scope: CalendarClosureScope;
+  period_key: string;
+  created_by: string;
+  created_at: string;
+};
 
 export type Account = {
   id: string;

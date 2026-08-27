@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { Plus, Trash2 } from "lucide-react";
+import { Ban, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { setClaimsEnabled } from "@/features/calendar/closures-actions";
 import { SlotBlock } from "@/features/calendar/slot-block";
 import { DuplicateDayMenu } from "@/features/slots/duplicate-day-menu";
 import { deleteSlotsInDay } from "@/features/slots/actions";
@@ -58,23 +60,30 @@ export function DayDetailPanel({
   role,
   accountId,
   workspaceId,
+  monthClaimsDisabled = false,
+  dayClaimsDisabled = false,
   fillHeight = false,
   onAddSlot,
   onEditSlot,
   onSlotsChanged,
+  onClosuresChanged,
 }: {
   day: Date | null;
   slots: SlotWithReservations[];
   role: WorkspaceRole;
   accountId: string;
   workspaceId: string;
+  monthClaimsDisabled?: boolean;
+  dayClaimsDisabled?: boolean;
   fillHeight?: boolean;
   onAddSlot: () => void;
   onEditSlot: (slot: SlotWithReservations) => void;
   onSlotsChanged: () => void | Promise<void>;
+  onClosuresChanged?: () => void | Promise<void>;
 }) {
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [togglingClaims, setTogglingClaims] = useState(false);
 
   if (!day) {
     return (
@@ -91,6 +100,32 @@ export function DayDetailPanel({
 
   const dayLabel = format(day, "MMMM d, yyyy");
   const dateKey = format(day, "yyyy-MM-dd");
+  const shortDayLabel = format(day, "MMM d");
+  const claimsDisabled = monthClaimsDisabled || dayClaimsDisabled;
+
+  async function toggleDayClaims(enabled: boolean) {
+    setTogglingClaims(true);
+    try {
+      const result = await setClaimsEnabled({
+        workspaceId,
+        scope: "day",
+        periodKey: dateKey,
+        enabled,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(
+        enabled
+          ? `${shortDayLabel} is live for claims`
+          : `${shortDayLabel} is disabled for claims`,
+      );
+      await onClosuresChanged?.();
+    } finally {
+      setTogglingClaims(false);
+    }
+  }
 
   return (
     <aside
@@ -127,6 +162,44 @@ export function DayDetailPanel({
           </div>
         )}
       </div>
+
+      {role === "admin" ? (
+        <div className="mt-4 flex shrink-0 items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]/50 px-3 py-2.5">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">
+              {dayClaimsDisabled
+                ? "Day disabled"
+                : monthClaimsDisabled
+                  ? "Month disabled"
+                  : "Day live"}
+            </p>
+            <p className="text-xs text-[var(--muted)]">
+              {monthClaimsDisabled
+                ? "This month is disabled, so claims stay closed even if the day is live."
+                : dayClaimsDisabled
+                  ? "Participants can see spots but cannot claim them today."
+                  : "Participants can claim open spots today."}
+            </p>
+          </div>
+          <Switch
+            checked={!dayClaimsDisabled}
+            disabled={togglingClaims}
+            aria-label={
+              dayClaimsDisabled
+                ? "Enable claims for this day"
+                : "Disable claims for this day"
+            }
+            onCheckedChange={(checked) => void toggleDayClaims(checked)}
+          />
+        </div>
+      ) : claimsDisabled ? (
+        <div className="mt-4 flex shrink-0 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]/50 px-3 py-2.5 text-sm text-[var(--muted)]">
+          <Ban className="h-4 w-4 shrink-0" />
+          {monthClaimsDisabled
+            ? "This month is not open for claims."
+            : "This day is not open for claims."}
+        </div>
+      ) : null}
 
       {role === "admin" && (
         <div className="mt-4 shrink-0">
@@ -166,6 +239,7 @@ export function DayDetailPanel({
               slot={slot}
               accountId={accountId}
               role={role}
+              claimsDisabled={claimsDisabled}
               onEdit={() => onEditSlot(slot)}
               onChanged={onSlotsChanged}
             />

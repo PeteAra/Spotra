@@ -32,12 +32,14 @@ export function SlotBlock({
   slot,
   accountId,
   role,
+  claimsDisabled = false,
   onEdit,
   onChanged,
 }: {
   slot: SlotWithReservations;
   accountId: string;
   role: WorkspaceRole;
+  claimsDisabled?: boolean;
   onEdit: () => void;
   onChanged: () => void;
 }) {
@@ -56,7 +58,7 @@ export function SlotBlock({
   const commentCount = countSlotComments(slot.reservations);
   const isFull = slot.availability === "full";
   const isBlocked = slot.availability === "blocked";
-  const isClosed = isFull || isBlocked;
+  const isClosed = isFull || isBlocked || claimsDisabled;
   const canClaim = !ownReservation && !isClosed;
   const palette = resolveSlotColor(slot.title, slot.color_key);
   const title = slot.title?.trim();
@@ -119,9 +121,9 @@ export function SlotBlock({
         backgroundColor: isClosed
           ? "color-mix(in srgb, var(--surface-muted) 55%, " + palette.bg + ")"
           : palette.bg,
-        borderColor: isFull
+        borderColor: isFull && !claimsDisabled
           ? "var(--danger)"
-          : isBlocked
+          : isBlocked || claimsDisabled
             ? "var(--muted)"
             : palette.border,
       }}
@@ -151,14 +153,19 @@ export function SlotBlock({
                 {title}
               </p>
             ) : null}
-            {isFull && (
+            {isFull && !claimsDisabled && (
               <span className="rounded bg-[var(--danger)] px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-white">
                 Full
               </span>
             )}
-            {isBlocked && (
+            {isBlocked && !claimsDisabled && (
               <span className="rounded bg-[var(--foreground)] px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-[var(--surface)]">
                 Blocked
+              </span>
+            )}
+            {claimsDisabled && (
+              <span className="rounded bg-[var(--foreground)] px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-[var(--surface)]">
+                Disabled
               </span>
             )}
           </div>
@@ -173,20 +180,20 @@ export function SlotBlock({
             <span
               className={cn(
                 "ml-1.5 font-normal",
-                isFull
+                isFull && !claimsDisabled
                   ? "text-[var(--danger)]"
-                  : isBlocked
-                    ? "text-[var(--muted)]"
-                    : "text-[var(--muted)]",
+                  : "text-[var(--muted)]",
               )}
             >
-              {isBlocked
+              {claimsDisabled
                 ? "· Not open for claims"
-                : isFull
-                  ? `· All ${slot.capacity} claimed`
-                  : `· ${slot.claimed_count}/${slot.capacity}${
-                      slot.availability === "available" ? " available" : ""
-                    }`}
+                : isBlocked
+                  ? "· Not open for claims"
+                  : isFull
+                    ? `· All ${slot.capacity} claimed`
+                    : `· ${slot.claimed_count}/${slot.capacity}${
+                        slot.availability === "available" ? " available" : ""
+                      }`}
             </span>
           </p>
         </button>

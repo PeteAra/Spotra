@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getClosuresForMonth } from "@/features/calendar/closures-actions";
 import { getSlotsForMonth } from "@/features/slots/actions";
 import { getWorkspaceBySlug } from "@/features/workspace/actions";
 import { listMembers, getMemberHistory } from "@/features/members/actions";
@@ -44,6 +45,37 @@ export function useInvalidateSlots(workspaceId: string | undefined, month: Date)
     });
     await queryClient.refetchQueries({
       queryKey: ["slots", workspaceId, monthKey(month)],
+    });
+  };
+}
+
+export function useClosures(workspaceId: string | undefined, month: Date) {
+  const key = monthKey(month);
+  return useQuery({
+    queryKey: ["closures", workspaceId, key],
+    enabled: Boolean(workspaceId),
+    queryFn: async () => {
+      const result = await getClosuresForMonth({
+        workspaceId: workspaceId!,
+        monthKey: key,
+      });
+      if (!result.ok) throw new Error(result.error);
+      return result.data;
+    },
+  });
+}
+
+export function useInvalidateClosures(
+  workspaceId: string | undefined,
+  month: Date,
+) {
+  const queryClient = useQueryClient();
+  return async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ["closures", workspaceId, monthKey(month)],
+    });
+    await queryClient.refetchQueries({
+      queryKey: ["closures", workspaceId, monthKey(month)],
     });
   };
 }

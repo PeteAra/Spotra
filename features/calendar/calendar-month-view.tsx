@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, isSameDay, isToday } from "date-fns";
-import { ChevronLeft, ChevronRight, Copy, ListChecks, Trash2 } from "lucide-react";
+import {
+  Ban,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  ListChecks,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +21,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { setClaimsEnabled } from "@/features/calendar/closures-actions";
 import { DayDetailPanel } from "@/features/calendar/day-detail-panel";
 import { MySpotsPanel } from "@/features/calendar/my-spots-panel";
 import { DuplicatePreviousMonthPrompt } from "@/features/slots/duplicate-previous-month-prompt";
@@ -22,7 +31,12 @@ import {
   deleteSlotsInMonth,
   duplicatePreviousMonth,
 } from "@/features/slots/actions";
-import { useInvalidateSlots, useSlots } from "@/hooks/use-workspace-data";
+import {
+  useClosures,
+  useInvalidateClosures,
+  useInvalidateSlots,
+  useSlots,
+} from "@/hooks/use-workspace-data";
 import {
   getMonthGrid,
   getClientTimeZoneOffsetMinutes,
@@ -71,6 +85,7 @@ export function CalendarMonthView({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [duplicatePromptOpen, setDuplicatePromptOpen] = useState(false);
   const [mySpotsOpen, setMySpotsOpen] = useState(false);
+  const [togglingMonthClaims, setTogglingMonthClaims] = useState(false);
 
   const detailRef = useRef<HTMLDivElement>(null);
   const mySpotsRef = useRef<HTMLDivElement>(null);
@@ -93,7 +108,21 @@ export function CalendarMonthView({
     workspaceId,
     month,
   );
+  const { data: closures = [] } = useClosures(workspaceId, month);
   const invalidateSlots = useInvalidateSlots(workspaceId, month);
+  const invalidateClosures = useInvalidateClosures(workspaceId, month);
+
+  const currentMonthKey = monthKey(month);
+  const monthClaimsDisabled = closures.some(
+    (c) => c.scope === "month" && c.period_key === currentMonthKey,
+  );
+  const disabledDayKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const closure of closures) {
+      if (closure.scope === "day") keys.add(closure.period_key);
+    }
+    return keys;
+  }, [closures]);
 
   useEffect(() => {
     const calendar = calendarRef.current;
@@ -121,11 +150,38 @@ export function CalendarMonthView({
   }, [mySpotsOpen, month, isLoading]);
 
   const invalidate = useCallback(async () => {
-    await invalidateSlots();
-    await queryClient.invalidateQueries({
-      queryKey: ["my-claimed-slots", workspaceId],
-    });
-  }, [invalidateSlots, queryClient, workspaceId]);
+    await Promise.all([
+      invalidateSlots(),
+      invalidateClosures(),
+      queryClient.invalidateQueries({
+        queryKey: ["my-claimed-slots", workspaceId],
+      }),
+    ]);
+  }, [invalidateClosures, invalidateSlots, queryClient, workspaceId]);
+
+  async function toggleMonthClaims(enabled: boolean) {
+    setTogglingMonthClaims(true);
+    try {
+      const result = await setClaimsEnabled({
+        workspaceId,
+        scope: "month",
+        periodKey: currentMonthKey,
+        enabled,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(
+        enabled
+          ? `${format(month, "MMMM")} is live for claims`
+          : `${format(month, "MMMM")} is disabled for claims`,
+      );
+      await invalidateClosures();
+    } finally {
+      setTogglingMonthClaims(false);
+    }
+  }
 
   const slotsByDay = useMemo(() => {
     const map = new Map<string, SlotWithReservations[]>();
@@ -222,6 +278,36 @@ export function CalendarMonthView({
           </div>
         </div>
 
+        {role === "admin" ? (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/50 px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
+                {monthClaimsDisabled ? "Month disabled" : "Month live"}
+              </p>
+              <p className="text-xs text-[var(--muted)]">
+                {monthClaimsDisabled
+                  ? "Participants can see spots but cannot claim any day this month."
+                  : "Participants can claim open spots this month."}
+              </p>
+            </div>
+            <Switch
+              checked={!monthClaimsDisabled}
+              disabled={togglingMonthClaims}
+              aria-label={
+                monthClaimsDisabled
+                  ? "Enable claims for this month"
+                  : "Disable claims for this month"
+              }
+              onCheckedChange={(checked) => void toggleMonthClaims(checked)}
+            />
+          </div>
+        ) : monthClaimsDisabled ? (
+          <div className="mb-4 flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/50 px-3 py-2.5 text-sm text-[var(--muted)]">
+            <Ban className="h-4 w-4 shrink-0" />
+            This month is not open for claims.
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-7 gap-1 sm:gap-2">
           {WEEKDAYS.map((d) => (
             <div
@@ -243,7 +329,9 @@ export function CalendarMonthView({
             const allBlocked =
               daySlots.length > 0 && daySlots.every((s) => s.capacity === 0);
             const dayFull = daySlots.length > 0 && openSeats === 0 && !allBlocked;
-            const dayClosed = dayFull || allBlocked;
+            const claimsDisabled =
+              inMonth && (monthClaimsDisabled || disabledDayKeys.has(key));
+            const dayClosed = dayFull || allBlocked || claimsDisabled;
 
             return (
               <button
@@ -260,47 +348,63 @@ export function CalendarMonthView({
                   isToday(day) && inMonth && !dayClosed && "bg-[var(--accent-soft)]",
                   dayFull &&
                     inMonth &&
+                    !claimsDisabled &&
                     "border-[var(--danger)]/40 bg-[color-mix(in_srgb,var(--danger)_6%,var(--surface-elevated))]",
-                  allBlocked &&
+                  (allBlocked || claimsDisabled) &&
                     inMonth &&
                     "border-[var(--border)] bg-[var(--surface-muted)]/70",
                 )}
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-1">
                   <span className="text-sm font-semibold">{format(day, "d")}</span>
-                  {daySlots.length > 0 && (
-                    <span
-                      className={cn(
-                        "rounded-full px-1.5 text-[10px] font-medium",
-                        dayFull
-                          ? "bg-[var(--danger)] text-white"
-                          : allBlocked
-                            ? "bg-[var(--foreground)] text-[var(--surface)]"
-                            : "bg-[var(--surface-muted)]",
-                      )}
-                    >
-                      {daySlots.length}
-                    </span>
-                  )}
+                  <span className="flex items-center gap-1">
+                    {claimsDisabled ? (
+                      <Ban
+                        className="h-3.5 w-3.5 text-[var(--muted)]"
+                        aria-label="Claims disabled"
+                      />
+                    ) : null}
+                    {daySlots.length > 0 && (
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 text-[10px] font-medium",
+                          dayFull && !claimsDisabled
+                            ? "bg-[var(--danger)] text-white"
+                            : allBlocked || claimsDisabled
+                              ? "bg-[var(--foreground)] text-[var(--surface)]"
+                              : "bg-[var(--surface-muted)]",
+                        )}
+                      >
+                        {daySlots.length}
+                      </span>
+                    )}
+                  </span>
                 </div>
                 {daySlots.length > 0 && (
                   <p
                     className={cn(
                       "mt-2 text-[10px] sm:text-xs",
-                      dayFull
+                      dayFull && !claimsDisabled
                         ? "font-semibold text-[var(--danger)]"
-                        : allBlocked
+                        : allBlocked || claimsDisabled
                           ? "font-semibold text-[var(--muted)]"
                           : "text-[var(--muted)]",
                     )}
                   >
-                    {allBlocked
-                      ? "Blocked"
-                      : dayFull
-                        ? "Full"
-                        : `${openSeats} open`}
+                    {claimsDisabled
+                      ? "Disabled"
+                      : allBlocked
+                        ? "Blocked"
+                        : dayFull
+                          ? "Full"
+                          : `${openSeats} open`}
                   </p>
                 )}
+                {claimsDisabled && daySlots.length === 0 ? (
+                  <p className="mt-2 text-[10px] font-semibold text-[var(--muted)] sm:text-xs">
+                    Disabled
+                  </p>
+                ) : null}
               </button>
             );
           })}
@@ -348,6 +452,10 @@ export function CalendarMonthView({
             role={role}
             accountId={accountId}
             workspaceId={workspaceId}
+            monthClaimsDisabled={monthClaimsDisabled}
+            dayClaimsDisabled={
+              selectedKey ? disabledDayKeys.has(selectedKey) : false
+            }
             fillHeight={dayColumnHeight != null}
             onAddSlot={() => {
               setEditingSlot(null);
@@ -358,6 +466,7 @@ export function CalendarMonthView({
               setSlotFormOpen(true);
             }}
             onSlotsChanged={invalidate}
+            onClosuresChanged={invalidateClosures}
           />
         </div>
       </div>

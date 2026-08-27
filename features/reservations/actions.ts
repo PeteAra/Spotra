@@ -18,6 +18,9 @@ function mapClaimError(message: string): string {
   if (message.includes("COMMENT_TOO_LONG")) {
     return "Comment must be 500 characters or fewer.";
   }
+  if (message.includes("CLAIMS_DISABLED")) {
+    return "Claims are disabled for this day.";
+  }
   return message;
 }
 
@@ -50,6 +53,7 @@ export async function claimSlot(input: {
   const { data, error } = await supabase.rpc("claim_slot", {
     p_slot_id: input.slotId,
     p_claim_comment: input.claimComment ?? null,
+    p_time_zone_offset_minutes: input.timeZoneOffsetMinutes,
   });
 
   if (error) {
