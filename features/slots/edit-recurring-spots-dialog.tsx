@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import type { SlotEditScope } from "@/types";
 
-const OPTIONS: Array<{
+const EDIT_OPTIONS: Array<{
   value: SlotEditScope;
   label: string;
   description: string;
@@ -28,28 +28,55 @@ const OPTIONS: Array<{
     value: "following",
     label: "This and following spots",
     description:
-      "Update this spot and later spots with the same title (settings always; times only if they matched this spot’s clock).",
+      "Change this spot and later spots with the same title and the same start/end times.",
   },
   {
     value: "all",
     label: "All spots",
     description:
-      "Update every spot with the same title (settings always; times only if they matched this spot’s clock).",
+      "Change every spot with the same title and the same start/end times.",
   },
 ];
 
-export function EditRecurringSpotsDialog({
+const DELETE_OPTIONS: Array<{
+  value: SlotEditScope;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "this",
+    label: "This spot",
+    description: "Only delete the spot you selected.",
+  },
+  {
+    value: "following",
+    label: "This and following spots",
+    description:
+      "Delete this spot and later spots with the same title and the same start/end times.",
+  },
+  {
+    value: "all",
+    label: "All spots",
+    description:
+      "Delete every spot with the same title and the same start/end times.",
+  },
+];
+
+export function RecurringSpotsScopeDialog({
   open,
   onOpenChange,
   onConfirm,
   loading = false,
+  mode = "edit",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (scope: SlotEditScope) => void | Promise<void>;
   loading?: boolean;
+  mode?: "edit" | "delete";
 }) {
   const [scope, setScope] = useState<SlotEditScope>("this");
+  const options = mode === "delete" ? DELETE_OPTIONS : EDIT_OPTIONS;
 
   return (
     <Dialog
@@ -61,17 +88,21 @@ export function EditRecurringSpotsDialog({
     >
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit Recurring Spots</DialogTitle>
+          <DialogTitle>
+            {mode === "delete" ? "Delete Recurring Spots" : "Edit Recurring Spots"}
+          </DialogTitle>
           <DialogDescription>
-            Other spots share this title. Choose which ones should get these
-            settings (comments, capacity, title, color). Times only change on
-            spots that already matched this spot&apos;s start and end time.
+            {mode === "delete"
+              ? "Other spots share this title and time. Choose which ones to delete. Spots with active claims are skipped."
+              : "Other spots share this title and time. Choose which ones should get these changes."}
           </DialogDescription>
         </DialogHeader>
 
         <fieldset className="space-y-2" disabled={loading}>
-          <legend className="sr-only">Edit scope</legend>
-          {OPTIONS.map((option) => {
+          <legend className="sr-only">
+            {mode === "delete" ? "Delete scope" : "Edit scope"}
+          </legend>
+          {options.map((option) => {
             const selected = scope === option.value;
             return (
               <label
@@ -85,7 +116,7 @@ export function EditRecurringSpotsDialog({
               >
                 <input
                   type="radio"
-                  name="edit-recurring-scope"
+                  name={`recurring-scope-${mode}`}
                   className="mt-1 h-4 w-4 accent-[var(--accent)]"
                   checked={selected}
                   onChange={() => setScope(option.value)}
@@ -112,14 +143,17 @@ export function EditRecurringSpotsDialog({
             Cancel
           </Button>
           <Button
+            variant={mode === "delete" ? "destructive" : "default"}
             disabled={loading}
             onClick={() => void onConfirm(scope)}
           >
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                Saving…
+                {mode === "delete" ? "Deleting…" : "Saving…"}
               </>
+            ) : mode === "delete" ? (
+              "Delete"
             ) : (
               "Save"
             )}
@@ -127,5 +161,28 @@ export function EditRecurringSpotsDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** @deprecated Use RecurringSpotsScopeDialog */
+export function EditRecurringSpotsDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  loading = false,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: (scope: SlotEditScope) => void | Promise<void>;
+  loading?: boolean;
+}) {
+  return (
+    <RecurringSpotsScopeDialog
+      mode="edit"
+      open={open}
+      onOpenChange={onOpenChange}
+      onConfirm={onConfirm}
+      loading={loading}
+    />
   );
 }

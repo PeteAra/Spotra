@@ -237,31 +237,83 @@ async function getSlotsInTimeRange(
   }));
 }
 
-export async function countSameTitleSlots(input: {
+export async function countMatchingSeriesSlots(input: {
   workspaceId: string;
-  title: string;
+  slotId: string;
+  timeZoneOffsetMinutes: number;
 }): Promise<ActionResult<number>> {
   noStore();
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
 
-  const normalized = normalizeSlotTitle(input.title);
-  if (!normalized) {
-    return { ok: true, data: 0 };
-  }
-
-  const { data, error } = await admin.supabase
+  const { data: current, error } = await admin.supabase
     .from("slots")
-    .select("id, title")
-    .eq("workspace_id", input.workspaceId);
+    .select("id, title, starts_at, ends_at")
+    .eq("id", input.slotId)
+    .eq("workspace_id", input.workspaceId)
+    .maybeSingle();
 
   if (error) return { ok: false, error: error.message };
+  if (!current) return { ok: false, error: "Spot not found." };
 
-  const count = (data ?? []).filter(
-    (row) => normalizeSlotTitle(row.title) === normalized,
-  ).length;
+  try {
+    const targets = await findMatchingSeriesSlots(
+      admin.supabase,
+      input.workspaceId,
+      current as Slot,
+      "all",
+      input.timeZoneOffsetMinutes,
+    );
+    return { ok: true, data: targets.length };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not check related spots.",
+    };
+  }
+}
 
-  return { ok: true, data: count };
+/** Spots that share the same title and wall-clock start/end times. */
+async function findMatchingSeriesSlots(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workspaceId: string,
+  current: Pick<Slot, "id" | "title" | "starts_at" | "ends_at">,
+  scope: SlotEditScope,
+  timeZoneOffsetMinutes: number,
+): Promise<Slot[]> {
+  if (scope === "this") {
+    const { data, error } = await supabase
+      .from("slots")
+      .select("*")
+      .eq("id", current.id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? ([data] as Slot[]) : [];
+  }
+
+  const titleKey = normalizeSlotTitle(current.title);
+  const currentStart = utcToWallParts(current.starts_at, timeZoneOffsetMinutes);
+  const currentEnd = utcToWallParts(current.ends_at, timeZoneOffsetMinutes);
+
+  const { data: siblings, error } = await supabase
+    .from("slots")
+    .select("*")
+    .eq("workspace_id", workspaceId);
+
+  if (error) throw new Error(error.message);
+
+  let matches = ((siblings ?? []) as Slot[]).filter((slot) => {
+    if (normalizeSlotTitle(slot.title) !== titleKey) return false;
+    const start = utcToWallParts(slot.starts_at, timeZoneOffsetMinutes);
+    const end = utcToWallParts(slot.ends_at, timeZoneOffsetMinutes);
+    return start.time === currentStart.time && end.time === currentEnd.time;
+  });
+
+  if (scope === "following") {
+    matches = matches.filter((slot) => slot.starts_at >= current.starts_at);
+  }
+
+  return matches;
 }
 
 /** Apply a color choice to every time slot in the workspace with the same title. */
@@ -489,33 +541,25 @@ export async function updateSlot(input: {
   if (!currentSlot) return { ok: false, error: "Spot not found." };
 
   const editScope: SlotEditScope = input.editScope ?? "this";
-  const originalTitle = normalizeSlotTitle(currentSlot.title);
 
-  let targets: Slot[] = [currentSlot as Slot];
-
-  if (editScope !== "this" && originalTitle) {
-    const { data: siblings, error: siblingsError } = await admin.supabase
-      .from("slots")
-      .select("*")
-      .eq("workspace_id", input.workspaceId);
-
-    if (siblingsError) return { ok: false, error: siblingsError.message };
-
-    const sameTitle = ((siblings ?? []) as Slot[]).filter(
-      (slot) => normalizeSlotTitle(slot.title) === originalTitle,
+  let targets: Slot[];
+  try {
+    targets = await findMatchingSeriesSlots(
+      admin.supabase,
+      input.workspaceId,
+      currentSlot as Slot,
+      editScope,
+      input.timeZoneOffsetMinutes,
     );
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not find related spots.",
+    };
+  }
 
-    if (editScope === "following") {
-      targets = sameTitle.filter(
-        (slot) => slot.starts_at >= currentSlot.starts_at,
-      );
-    } else {
-      targets = sameTitle;
-    }
-
-    if (!targets.some((slot) => slot.id === input.slotId)) {
-      targets = [currentSlot as Slot, ...targets];
-    }
+  if (targets.length === 0) {
+    return { ok: false, error: "Spot not found." };
   }
 
   const targetIds = new Set(targets.map((slot) => slot.id));
@@ -549,18 +593,8 @@ export async function updateSlot(input: {
     ends_at: string;
   };
 
-  // Original wall-clock times for the spot being edited (before this save).
-  // Used so "this and following" / "all" only retimes siblings that shared the
-  // same clock window — same title alone is not a single series.
-  const originalWallStart = utcToWallParts(
-    currentSlot.starts_at,
-    input.timeZoneOffsetMinutes,
-  );
-  const originalWallEnd = utcToWallParts(
-    currentSlot.ends_at,
-    input.timeZoneOffsetMinutes,
-  );
-
+  // Targets already share title + original clock times. Apply the new
+  // wall-clock times to each occurrence's own date.
   const planned: PlannedUpdate[] = targets.map((target) => {
     if (target.id === input.slotId) {
       const startsAt = wallDateTimeToUtc(
@@ -580,36 +614,14 @@ export async function updateSlot(input: {
       };
     }
 
-    const siblingStart = utcToWallParts(
-      target.starts_at,
-      input.timeZoneOffsetMinutes,
-    );
-    const siblingEnd = utcToWallParts(
-      target.ends_at,
-      input.timeZoneOffsetMinutes,
-    );
-    const matchedOriginalClock =
-      siblingStart.time === originalWallStart.time &&
-      siblingEnd.time === originalWallEnd.time;
-
-    // Metadata (comments, capacity, title, color) always applies.
-    // Clock times only move for siblings that had the same start/end time
-    // as this spot before the edit — otherwise keep each spot's own schedule.
-    if (!matchedOriginalClock) {
-      return {
-        id: target.id,
-        starts_at: target.starts_at,
-        ends_at: target.ends_at,
-      };
-    }
-
+    const wall = utcToWallParts(target.starts_at, input.timeZoneOffsetMinutes);
     const startsAt = wallDateTimeToUtc(
-      siblingStart.date,
+      wall.date,
       parsed.data.startTime,
       input.timeZoneOffsetMinutes,
     );
     const endsAt = wallDateTimeToUtc(
-      siblingStart.date,
+      wall.date,
       parsed.data.endTime,
       input.timeZoneOffsetMinutes,
     );
@@ -830,19 +842,59 @@ export async function updateSlot(input: {
 export async function deleteSlot(input: {
   slotId: string;
   workspaceId: string;
-}): Promise<ActionResult> {
+  deleteScope?: SlotEditScope;
+  timeZoneOffsetMinutes?: number;
+}): Promise<ActionResult<{ deleted: number; skipped: number }>> {
   const admin = await requireAdmin(input.workspaceId);
   if (!admin.ok) return { ok: false, error: admin.error };
 
-  const { count: activeClaims, error: countError } = await admin.supabase
+  const deleteScope: SlotEditScope = input.deleteScope ?? "this";
+  const timeZoneOffsetMinutes =
+    input.timeZoneOffsetMinutes ?? 0;
+
+  const { data: currentSlot, error: currentError } = await admin.supabase
+    .from("slots")
+    .select("*")
+    .eq("id", input.slotId)
+    .eq("workspace_id", input.workspaceId)
+    .maybeSingle();
+
+  if (currentError) return { ok: false, error: currentError.message };
+  if (!currentSlot) return { ok: false, error: "Spot not found." };
+
+  let targets: Slot[];
+  try {
+    targets = await findMatchingSeriesSlots(
+      admin.supabase,
+      input.workspaceId,
+      currentSlot as Slot,
+      deleteScope,
+      timeZoneOffsetMinutes,
+    );
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not find related spots.",
+    };
+  }
+
+  if (targets.length === 0) {
+    return { ok: false, error: "Spot not found." };
+  }
+
+  const targetIds = targets.map((slot) => slot.id);
+
+  const { data: claimRows, error: claimError } = await admin.supabase
     .from("reservations")
-    .select("*", { count: "exact", head: true })
-    .eq("slot_id", input.slotId)
+    .select("slot_id")
+    .in("slot_id", targetIds)
     .eq("status", "claimed");
 
-  if (countError) return { ok: false, error: countError.message };
+  if (claimError) return { ok: false, error: claimError.message };
 
-  if ((activeClaims ?? 0) > 0) {
+  const claimedIds = new Set((claimRows ?? []).map((row) => row.slot_id));
+
+  if (deleteScope === "this" && claimedIds.has(input.slotId)) {
     return {
       ok: false,
       error:
@@ -850,22 +902,39 @@ export async function deleteSlot(input: {
     };
   }
 
-  // Cancelled claim rows keep a FK to the slot (ON DELETE RESTRICT), so clear
-  // history for this slot before deleting the container.
-  const { error: historyError } = await admin.supabase
-    .from("reservations")
-    .delete()
-    .eq("slot_id", input.slotId);
+  const deletable = targets.filter((slot) => !claimedIds.has(slot.id));
+  const skipped = targets.length - deletable.length;
 
-  if (historyError) return { ok: false, error: historyError.message };
+  for (const target of deletable) {
+    // Cancelled claim rows keep a FK to the slot (ON DELETE RESTRICT), so clear
+    // history for this slot before deleting the container.
+    const { error: historyError } = await admin.supabase
+      .from("reservations")
+      .delete()
+      .eq("slot_id", target.id);
 
-  const { error } = await admin.supabase
-    .from("slots")
-    .delete()
-    .eq("id", input.slotId);
+    if (historyError) return { ok: false, error: historyError.message };
 
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, data: undefined };
+    const { error } = await admin.supabase
+      .from("slots")
+      .delete()
+      .eq("id", target.id);
+
+    if (error) return { ok: false, error: error.message };
+  }
+
+  if (deletable.length === 0) {
+    return {
+      ok: false,
+      error:
+        "None of those spots could be deleted because they still have active claims.",
+    };
+  }
+
+  return {
+    ok: true,
+    data: { deleted: deletable.length, skipped },
+  };
 }
 
 async function copySlotsToDates(

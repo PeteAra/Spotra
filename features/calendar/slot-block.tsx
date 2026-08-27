@@ -10,11 +10,23 @@ import {
 } from "@/features/calendar/slot-comments-dialog";
 import { SlotClaimToast } from "@/features/reservations/slot-claim-toast";
 import { SlotCancelToast } from "@/features/reservations/slot-cancel-toast";
-import { deleteSlot } from "@/features/slots/actions";
-import { formatTimeRange } from "@/lib/utils/dates";
+import { RecurringSpotsScopeDialog } from "@/features/slots/edit-recurring-spots-dialog";
+import {
+  countMatchingSeriesSlots,
+  deleteSlot,
+} from "@/features/slots/actions";
+import {
+  formatTimeRange,
+  getClientTimeZoneOffsetMinutes,
+} from "@/lib/utils/dates";
 import { resolveSlotColor } from "@/lib/utils/slot-color";
 import { cn } from "@/lib/utils/cn";
-import type { Reservation, SlotWithReservations, WorkspaceRole } from "@/types";
+import type {
+  Reservation,
+  SlotEditScope,
+  SlotWithReservations,
+  WorkspaceRole,
+} from "@/types";
 
 export function SlotBlock({
   slot,
@@ -32,6 +44,8 @@ export function SlotBlock({
   const [claimOpen, setClaimOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [deleteScopeOpen, setDeleteScopeOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [activeReservation, setActiveReservation] = useState<Reservation | null>(
     null,
   );
@@ -46,6 +60,54 @@ export function SlotBlock({
   const canClaim = !ownReservation && !isClosed;
   const palette = resolveSlotColor(slot.title, slot.color_key);
   const title = slot.title?.trim();
+
+  async function runDelete(deleteScope: SlotEditScope) {
+    setDeleting(true);
+    const result = await deleteSlot({
+      slotId: slot.id,
+      workspaceId: slot.workspace_id,
+      deleteScope,
+      timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
+    });
+    setDeleting(false);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    setDeleteScopeOpen(false);
+    if (result.data.deleted > 1) {
+      toast.success(
+        `Deleted ${result.data.deleted} spots` +
+          (result.data.skipped
+            ? ` (${result.data.skipped} skipped — active claims)`
+            : ""),
+      );
+    } else if (result.data.skipped > 0) {
+      toast.success(
+        `Time slot deleted (${result.data.skipped} skipped — active claims)`,
+      );
+    } else {
+      toast.success("Time slot deleted");
+    }
+    onChanged();
+  }
+
+  async function handleDeleteClick() {
+    const related = await countMatchingSeriesSlots({
+      workspaceId: slot.workspace_id,
+      slotId: slot.id,
+      timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
+    });
+    if (!related.ok) {
+      toast.error(related.error);
+      return;
+    }
+    if (related.data > 1) {
+      setDeleteScopeOpen(true);
+      return;
+    }
+    await runDelete("this");
+  }
 
   return (
     <div
@@ -183,18 +245,8 @@ export function SlotBlock({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={async () => {
-                  const result = await deleteSlot({
-                    slotId: slot.id,
-                    workspaceId: slot.workspace_id,
-                  });
-                  if (!result.ok) {
-                    toast.error(result.error);
-                    return;
-                  }
-                  toast.success("Time slot deleted");
-                  onChanged();
-                }}
+                disabled={deleting}
+                onClick={() => void handleDeleteClick()}
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
@@ -248,6 +300,14 @@ export function SlotBlock({
         slotTitle={title ?? null}
         reservations={slot.reservations}
         accountId={accountId}
+      />
+
+      <RecurringSpotsScopeDialog
+        mode="delete"
+        open={deleteScopeOpen}
+        loading={deleting}
+        onOpenChange={setDeleteScopeOpen}
+        onConfirm={(scope) => void runDelete(scope)}
       />
     </div>
   );

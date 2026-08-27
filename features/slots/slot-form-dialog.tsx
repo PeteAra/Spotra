@@ -16,9 +16,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { EditRecurringSpotsDialog } from "@/features/slots/edit-recurring-spots-dialog";
+import { RecurringSpotsScopeDialog } from "@/features/slots/edit-recurring-spots-dialog";
 import {
-  countSameTitleSlots,
+  countMatchingSeriesSlots,
   createSlot,
   updateSlot,
 } from "@/features/slots/actions";
@@ -212,9 +212,10 @@ export function SlotFormDialog({
           className="space-y-4"
           onSubmit={form.handleSubmit(async (values) => {
             if (slot) {
-              const related = await countSameTitleSlots({
+              const related = await countMatchingSeriesSlots({
                 workspaceId,
-                title: slot.title ?? "",
+                slotId: slot.id,
+                timeZoneOffsetMinutes: getClientTimeZoneOffsetMinutes(),
               });
               if (!related.ok) {
                 toast.error(related.error);
@@ -491,7 +492,8 @@ export function SlotFormDialog({
       </DialogContent>
     </Dialog>
 
-    <EditRecurringSpotsDialog
+    <RecurringSpotsScopeDialog
+      mode="edit"
       open={scopeOpen}
       loading={saving}
       onOpenChange={(next) => {
