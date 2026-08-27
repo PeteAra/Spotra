@@ -40,6 +40,7 @@ import {
 import {
   getMonthGrid,
   getClientTimeZoneOffsetMinutes,
+  isCalendarDayPast,
   isInMonth,
   monthKey,
   nextMonth,
@@ -329,9 +330,11 @@ export function CalendarMonthView({
             const allBlocked =
               daySlots.length > 0 && daySlots.every((s) => s.capacity === 0);
             const dayFull = daySlots.length > 0 && openSeats === 0 && !allBlocked;
-            const claimsDisabled =
+            const claimsPaused =
               inMonth && (monthClaimsDisabled || disabledDayKeys.has(key));
-            const dayClosed = dayFull || allBlocked || claimsDisabled;
+            const isPastDay = inMonth && isCalendarDayPast(day);
+            const isMutedDay = claimsPaused || isPastDay;
+            const dayClosed = dayFull || allBlocked || isMutedDay;
 
             return (
               <button
@@ -348,63 +351,55 @@ export function CalendarMonthView({
                   isToday(day) && inMonth && !dayClosed && "bg-[var(--accent-soft)]",
                   dayFull &&
                     inMonth &&
-                    !claimsDisabled &&
+                    !isMutedDay &&
                     "border-[var(--danger)]/40 bg-[color-mix(in_srgb,var(--danger)_6%,var(--surface-elevated))]",
-                  (allBlocked || claimsDisabled) &&
+                  allBlocked &&
                     inMonth &&
+                    !isMutedDay &&
                     "border-[var(--border)] bg-[var(--surface-muted)]/70",
+                  isMutedDay &&
+                    "border-[var(--border)] bg-[var(--surface-muted)] text-[var(--muted)] opacity-55 hover:border-[var(--border)]",
                 )}
               >
                 <div className="flex items-start justify-between gap-1">
                   <span className="text-sm font-semibold">{format(day, "d")}</span>
-                  <span className="flex items-center gap-1">
-                    {claimsDisabled ? (
-                      <Pause
-                        className="h-3.5 w-3.5 text-[var(--muted)]"
-                        aria-label="Claims paused"
-                      />
-                    ) : null}
-                    {daySlots.length > 0 && (
-                      <span
-                        className={cn(
-                          "rounded-full px-1.5 text-[10px] font-medium",
-                          dayFull && !claimsDisabled
+                  {daySlots.length > 0 && (
+                    <span
+                      className={cn(
+                        "rounded-full px-1.5 text-[10px] font-medium",
+                        isMutedDay
+                          ? "bg-[var(--foreground)]/15 text-[var(--muted)]"
+                          : dayFull
                             ? "bg-[var(--danger)] text-white"
-                            : allBlocked || claimsDisabled
+                            : allBlocked
                               ? "bg-[var(--foreground)] text-[var(--surface)]"
                               : "bg-[var(--surface-muted)]",
-                        )}
-                      >
-                        {daySlots.length}
-                      </span>
-                    )}
-                  </span>
+                      )}
+                    >
+                      {daySlots.length}
+                    </span>
+                  )}
                 </div>
                 {daySlots.length > 0 && (
                   <p
                     className={cn(
                       "mt-2 text-[10px] sm:text-xs",
-                      dayFull && !claimsDisabled
-                        ? "font-semibold text-[var(--danger)]"
-                        : allBlocked || claimsDisabled
-                          ? "font-semibold text-[var(--muted)]"
-                          : "text-[var(--muted)]",
+                      isMutedDay
+                        ? "text-[var(--muted)]"
+                        : dayFull
+                          ? "font-semibold text-[var(--danger)]"
+                          : allBlocked
+                            ? "font-semibold text-[var(--muted)]"
+                            : "text-[var(--muted)]",
                     )}
                   >
-                    {claimsDisabled
-                      ? "Paused"
-                      : allBlocked
-                        ? "Blocked"
-                        : dayFull
-                          ? "Full"
-                          : `${openSeats} open`}
+                    {allBlocked
+                      ? "Blocked"
+                      : dayFull
+                        ? "Full"
+                        : `${openSeats} open`}
                   </p>
                 )}
-                {claimsDisabled && daySlots.length === 0 ? (
-                  <p className="mt-2 text-[10px] font-semibold text-[var(--muted)] sm:text-xs">
-                    Paused
-                  </p>
-                ) : null}
               </button>
             );
           })}
@@ -456,6 +451,7 @@ export function CalendarMonthView({
             dayClaimsDisabled={
               selectedKey ? disabledDayKeys.has(selectedKey) : false
             }
+            dayIsPast={selectedDay ? isCalendarDayPast(selectedDay) : false}
             fillHeight={dayColumnHeight != null}
             onAddSlot={() => {
               setEditingSlot(null);

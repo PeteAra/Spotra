@@ -15,6 +15,11 @@ export function monthKey(date: Date): string {
   return format(date, "yyyy-MM");
 }
 
+/** True when `day` is before today in the local calendar (today is not past). */
+export function isCalendarDayPast(day: Date, now = new Date()): boolean {
+  return format(day, "yyyy-MM-dd") < format(now, "yyyy-MM-dd");
+}
+
 export function parseMonthKey(key: string): Date {
   const [year, month] = key.split("-").map(Number);
   return new Date(year, month - 1, 1);

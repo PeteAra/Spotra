@@ -62,6 +62,7 @@ export function DayDetailPanel({
   workspaceId,
   monthClaimsDisabled = false,
   dayClaimsDisabled = false,
+  dayIsPast = false,
   fillHeight = false,
   onAddSlot,
   onEditSlot,
@@ -75,6 +76,7 @@ export function DayDetailPanel({
   workspaceId: string;
   monthClaimsDisabled?: boolean;
   dayClaimsDisabled?: boolean;
+  dayIsPast?: boolean;
   fillHeight?: boolean;
   onAddSlot: () => void;
   onEditSlot: (slot: SlotWithReservations) => void;
@@ -101,7 +103,8 @@ export function DayDetailPanel({
   const dayLabel = format(day, "MMMM d, yyyy");
   const dateKey = format(day, "yyyy-MM-dd");
   const shortDayLabel = format(day, "MMM d");
-  const claimsDisabled = monthClaimsDisabled || dayClaimsDisabled;
+  const claimsPaused = monthClaimsDisabled || dayClaimsDisabled;
+  const claimsDisabled = claimsPaused || dayIsPast;
 
   async function toggleDayClaims(enabled: boolean) {
     setTogglingClaims(true);
@@ -167,32 +170,42 @@ export function DayDetailPanel({
         <div className="mt-4 flex shrink-0 items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]/50 px-3 py-2.5">
           <div className="min-w-0">
             <p className="text-sm font-medium">
-              {dayClaimsDisabled
-                ? "Day paused"
-                : monthClaimsDisabled
-                  ? "Month paused"
-                  : "Day live"}
+              {dayIsPast
+                ? "Past day"
+                : dayClaimsDisabled
+                  ? "Day paused"
+                  : monthClaimsDisabled
+                    ? "Month paused"
+                    : "Day live"}
             </p>
             <p className="text-xs text-[var(--muted)]">
-              {monthClaimsDisabled
-                ? "This month is paused, so claims stay closed even if the day is live."
-                : dayClaimsDisabled
-                  ? "Participants can see spots but cannot claim them today."
-                  : "Participants can claim open spots today."}
+              {dayIsPast
+                ? "Past days can’t be claimed. You can still manage spots."
+                : monthClaimsDisabled
+                  ? "This month is paused, so claims stay closed even if the day is live."
+                  : dayClaimsDisabled
+                    ? "Participants can see spots but cannot claim them today."
+                    : "Participants can claim open spots today."}
             </p>
           </div>
-          <Switch
-            checked={!dayClaimsDisabled}
-            disabled={togglingClaims}
-            aria-label={
-              dayClaimsDisabled
-                ? "Resume claims for this day"
-                : "Pause claims for this day"
-            }
-            onCheckedChange={(checked) => void toggleDayClaims(checked)}
-          />
+          {!dayIsPast ? (
+            <Switch
+              checked={!dayClaimsDisabled}
+              disabled={togglingClaims}
+              aria-label={
+                dayClaimsDisabled
+                  ? "Resume claims for this day"
+                  : "Pause claims for this day"
+              }
+              onCheckedChange={(checked) => void toggleDayClaims(checked)}
+            />
+          ) : null}
         </div>
-      ) : claimsDisabled ? (
+      ) : dayIsPast ? (
+        <div className="mt-4 flex shrink-0 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]/50 px-3 py-2.5 text-sm text-[var(--muted)]">
+          This day has passed.
+        </div>
+      ) : claimsPaused ? (
         <div className="mt-4 flex shrink-0 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]/50 px-3 py-2.5 text-sm text-[var(--muted)]">
           <Pause className="h-4 w-4 shrink-0" />
           {monthClaimsDisabled
@@ -240,6 +253,9 @@ export function DayDetailPanel({
               accountId={accountId}
               role={role}
               claimsDisabled={claimsDisabled}
+              claimsUnavailableReason={
+                dayIsPast ? "past" : claimsPaused ? "paused" : undefined
+              }
               onEdit={() => onEditSlot(slot)}
               onChanged={onSlotsChanged}
             />

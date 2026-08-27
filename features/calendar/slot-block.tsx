@@ -33,6 +33,7 @@ export function SlotBlock({
   accountId,
   role,
   claimsDisabled = false,
+  claimsUnavailableReason,
   onEdit,
   onChanged,
 }: {
@@ -40,6 +41,7 @@ export function SlotBlock({
   accountId: string;
   role: WorkspaceRole;
   claimsDisabled?: boolean;
+  claimsUnavailableReason?: "paused" | "past";
   onEdit: () => void;
   onChanged: () => void;
 }) {
@@ -163,7 +165,7 @@ export function SlotBlock({
                 Blocked
               </span>
             )}
-            {claimsDisabled && (
+            {claimsDisabled && claimsUnavailableReason === "paused" && (
               <span className="rounded bg-[var(--foreground)] px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-[var(--surface)]">
                 Paused
               </span>
@@ -185,15 +187,17 @@ export function SlotBlock({
                   : "text-[var(--muted)]",
               )}
             >
-              {claimsDisabled
-                ? "· Claims paused"
-                : isBlocked
-                  ? "· Not open for claims"
-                  : isFull
-                    ? `· All ${slot.capacity} claimed`
-                    : `· ${slot.claimed_count}/${slot.capacity}${
-                        slot.availability === "available" ? " available" : ""
-                      }`}
+              {claimsUnavailableReason === "past"
+                ? "· Past day"
+                : claimsUnavailableReason === "paused"
+                  ? "· Claims paused"
+                  : isBlocked
+                    ? "· Not open for claims"
+                    : isFull
+                      ? `· All ${slot.capacity} claimed`
+                      : `· ${slot.claimed_count}/${slot.capacity}${
+                          slot.availability === "available" ? " available" : ""
+                        }`}
             </span>
           </p>
         </button>

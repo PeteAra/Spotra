@@ -21,6 +21,9 @@ function mapClaimError(message: string): string {
   if (message.includes("CLAIMS_DISABLED")) {
     return "Claims are paused for this day.";
   }
+  if (message.includes("DAY_IN_PAST")) {
+    return "Past days can't be claimed.";
+  }
   return message;
 }
 
