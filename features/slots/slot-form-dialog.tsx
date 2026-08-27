@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -477,7 +477,14 @@ export function SlotFormDialog({
               type="submit"
               disabled={form.formState.isSubmitting || saving}
             >
-              {form.formState.isSubmitting || saving ? "Saving…" : "Save time slot"}
+              {form.formState.isSubmitting || saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  Saving…
+                </>
+              ) : (
+                "Save time slot"
+              )}
             </Button>
           </DialogFooter>
         </form>
