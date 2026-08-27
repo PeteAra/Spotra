@@ -21,7 +21,6 @@ import {
   countSameTitleSlots,
   createSlot,
   updateSlot,
-  type SlotEditScope,
 } from "@/features/slots/actions";
 import {
   addOneHour,
@@ -44,7 +43,7 @@ import {
   slotRepeatRules,
   type SlotFormInput,
 } from "@/lib/validators";
-import type { SlotWithReservations } from "@/types";
+import type { SlotEditScope, SlotWithReservations } from "@/types";
 
 const selectClassName =
   "flex h-10 w-full cursor-pointer appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 pr-9 text-sm text-[var(--foreground)] shadow-[inset_0_1px_0_color-mix(in_srgb,white_55%,transparent)] transition hover:border-[var(--accent)]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]";
@@ -119,8 +118,8 @@ export function SlotFormDialog({
         startTime: snapToTimeStep(format(start, "HH:mm")),
         endTime: snapToTimeStep(format(end, "HH:mm")),
         capacity: slot.capacity,
-        commentsEnabled: slot.comments_enabled,
-        commentsRequired: slot.comments_required,
+        commentsEnabled: slot.comments_enabled ?? false,
+        commentsRequired: slot.comments_required ?? false,
         colorKey: isSlotColorKey(slot.color_key) ? slot.color_key : null,
         repeat: "none",
       });

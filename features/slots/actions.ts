@@ -20,6 +20,7 @@ import type {
   ActionResult,
   Reservation,
   Slot,
+  SlotEditScope,
   SlotWithReservations,
 } from "@/types";
 
@@ -235,8 +236,6 @@ async function getSlotsInTimeRange(
     ends_at: row.ends_at,
   }));
 }
-
-export type SlotEditScope = "this" | "following" | "all";
 
 export async function countSameTitleSlots(input: {
   workspaceId: string;

@@ -9,10 +9,18 @@ import {
 type SendResult = { ok: true; id?: string } | { ok: false; error: string };
 
 function siteUrl() {
-  return (
+  const raw =
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
-    "https://spotra.dev"
-  );
+    "https://spotra.dev";
+  try {
+    const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
+    if (url.hostname === "spotra.dev" || url.hostname === "www.spotra.dev") {
+      url.protocol = "https:";
+    }
+    return url.origin;
+  } catch {
+    return "https://spotra.dev";
+  }
 }
 
 function fromAddress() {

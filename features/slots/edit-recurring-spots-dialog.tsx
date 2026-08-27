@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
-import type { SlotEditScope } from "@/features/slots/actions";
+import type { SlotEditScope } from "@/types";
 
 const OPTIONS: Array<{
   value: SlotEditScope;

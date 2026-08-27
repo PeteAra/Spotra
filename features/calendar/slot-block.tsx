@@ -130,7 +130,7 @@ export function SlotBlock({
         </button>
 
         <div className="flex shrink-0 items-center gap-0.5">
-          {slot.comments_enabled && (
+          {slot.comments_enabled ? (
             <Button
               variant="ghost"
               size="icon"
@@ -149,14 +149,14 @@ export function SlotBlock({
                 </span>
               ) : null}
             </Button>
-          )}
+          ) : null}
           {canClaim && (
             <SlotClaimToast
               open={claimOpen}
               onOpenChange={setClaimOpen}
               slotId={slot.id}
-              commentsEnabled={slot.comments_enabled}
-              commentsRequired={slot.comments_required}
+              commentsEnabled={Boolean(slot.comments_enabled)}
+              commentsRequired={Boolean(slot.comments_required)}
               onClaimed={onChanged}
             >
               <Button

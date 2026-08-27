@@ -79,18 +79,22 @@ export function WorkspacesPageClient({ account }: { account: Account }) {
           </div>
           <div className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 sm:min-w-[14rem]">
             <Avatar className="h-10 w-10">
-              <AvatarImage src={account.avatar_url ?? undefined} />
+              <AvatarImage src={account.avatar_url || undefined} />
               <AvatarFallback>
-                {account.display_name.slice(0, 2).toUpperCase()}
+                {(account.display_name || account.email || "?")
+                  .slice(0, 2)
+                  .toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">
-                {account.display_name}
+                {account.display_name || account.email || "Signed in"}
               </p>
-              <p className="truncate text-xs text-[var(--muted)]">
-                {account.email}
-              </p>
+              {account.email ? (
+                <p className="truncate text-xs text-[var(--muted)]">
+                  {account.email}
+                </p>
+              ) : null}
             </div>
           </div>
         </div>

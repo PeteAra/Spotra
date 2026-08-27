@@ -136,14 +136,16 @@ export function MembersTable({
           >
             <div className="flex items-start gap-3">
               <Avatar>
-                <AvatarImage src={member.account.avatar_url ?? undefined} />
+                <AvatarImage src={member.account.avatar_url || undefined} />
                 <AvatarFallback>
-                  {member.account.display_name.slice(0, 2).toUpperCase()}
+                  {(member.account.display_name || member.account.email || "?")
+                    .slice(0, 2)
+                    .toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">
-                  {member.account.display_name}
+                  {member.account.display_name || member.account.email || "Member"}
                   {member.account_id === currentAccountId ? " (you)" : ""}
                 </p>
                 <p className="truncate text-xs text-[var(--muted)]">
@@ -183,15 +185,21 @@ export function MembersTable({
                   <div className="flex items-center gap-3">
                     <Avatar>
                       <AvatarImage
-                        src={member.account.avatar_url ?? undefined}
+                        src={member.account.avatar_url || undefined}
                       />
                       <AvatarFallback>
-                        {member.account.display_name.slice(0, 2).toUpperCase()}
+                        {(member.account.display_name ||
+                          member.account.email ||
+                          "?")
+                          .slice(0, 2)
+                          .toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <span>
                       <span className="block font-medium">
-                        {member.account.display_name}
+                        {member.account.display_name ||
+                          member.account.email ||
+                          "Member"}
                         {member.account_id === currentAccountId ? " (you)" : ""}
                       </span>
                       <span className="block text-xs text-[var(--muted)]">

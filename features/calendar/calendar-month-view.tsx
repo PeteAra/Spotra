@@ -130,7 +130,9 @@ export function CalendarMonthView({
   const slotsByDay = useMemo(() => {
     const map = new Map<string, SlotWithReservations[]>();
     for (const slot of slots) {
-      const key = format(new Date(slot.starts_at), "yyyy-MM-dd");
+      const starts = new Date(slot.starts_at);
+      if (Number.isNaN(starts.getTime())) continue;
+      const key = format(starts, "yyyy-MM-dd");
       const list = map.get(key) ?? [];
       list.push(slot);
       map.set(key, list);

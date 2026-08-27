@@ -55,9 +55,14 @@ export async function listMembers(
 
   if (error) return { ok: false, error: error.message };
 
+  const members = ((data ?? []) as (WorkspaceMember & { account: Account | null })[])
+    .filter((row): row is WorkspaceMember & { account: Account } =>
+      Boolean(row.account?.id),
+    );
+
   return {
     ok: true,
-    data: (data ?? []) as (WorkspaceMember & { account: Account })[],
+    data: members,
   };
 }
 
