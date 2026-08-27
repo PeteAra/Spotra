@@ -19,7 +19,7 @@ function mapClaimError(message: string): string {
     return "Comment must be 500 characters or fewer.";
   }
   if (message.includes("CLAIMS_DISABLED")) {
-    return "Claims are disabled for this day.";
+    return "Claims are paused for this day.";
   }
   return message;
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { Ban, Plus, Trash2 } from "lucide-react";
+import { Pause, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -119,7 +119,7 @@ export function DayDetailPanel({
       toast.success(
         enabled
           ? `${shortDayLabel} is live for claims`
-          : `${shortDayLabel} is disabled for claims`,
+          : `${shortDayLabel} is paused for claims`,
       );
       await onClosuresChanged?.();
     } finally {
@@ -168,14 +168,14 @@ export function DayDetailPanel({
           <div className="min-w-0">
             <p className="text-sm font-medium">
               {dayClaimsDisabled
-                ? "Day disabled"
+                ? "Day paused"
                 : monthClaimsDisabled
-                  ? "Month disabled"
+                  ? "Month paused"
                   : "Day live"}
             </p>
             <p className="text-xs text-[var(--muted)]">
               {monthClaimsDisabled
-                ? "This month is disabled, so claims stay closed even if the day is live."
+                ? "This month is paused, so claims stay closed even if the day is live."
                 : dayClaimsDisabled
                   ? "Participants can see spots but cannot claim them today."
                   : "Participants can claim open spots today."}
@@ -186,18 +186,18 @@ export function DayDetailPanel({
             disabled={togglingClaims}
             aria-label={
               dayClaimsDisabled
-                ? "Enable claims for this day"
-                : "Disable claims for this day"
+                ? "Resume claims for this day"
+                : "Pause claims for this day"
             }
             onCheckedChange={(checked) => void toggleDayClaims(checked)}
           />
         </div>
       ) : claimsDisabled ? (
         <div className="mt-4 flex shrink-0 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]/50 px-3 py-2.5 text-sm text-[var(--muted)]">
-          <Ban className="h-4 w-4 shrink-0" />
+          <Pause className="h-4 w-4 shrink-0" />
           {monthClaimsDisabled
-            ? "This month is not open for claims."
-            : "This day is not open for claims."}
+            ? "Claims are paused this month."
+            : "Claims are paused today."}
         </div>
       ) : null}
 

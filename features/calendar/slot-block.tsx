@@ -165,7 +165,7 @@ export function SlotBlock({
             )}
             {claimsDisabled && (
               <span className="rounded bg-[var(--foreground)] px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-[var(--surface)]">
-                Disabled
+                Paused
               </span>
             )}
           </div>
@@ -186,7 +186,7 @@ export function SlotBlock({
               )}
             >
               {claimsDisabled
-                ? "· Not open for claims"
+                ? "· Claims paused"
                 : isBlocked
                   ? "· Not open for claims"
                   : isFull

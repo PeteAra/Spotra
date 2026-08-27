@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, isSameDay, isToday } from "date-fns";
 import {
-  Ban,
   ChevronLeft,
   ChevronRight,
   Copy,
   ListChecks,
+  Pause,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -175,7 +175,7 @@ export function CalendarMonthView({
       toast.success(
         enabled
           ? `${format(month, "MMMM")} is live for claims`
-          : `${format(month, "MMMM")} is disabled for claims`,
+          : `${format(month, "MMMM")} is paused for claims`,
       );
       await invalidateClosures();
     } finally {
@@ -282,7 +282,7 @@ export function CalendarMonthView({
           <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/50 px-3 py-2.5">
             <div className="min-w-0">
               <p className="text-sm font-medium">
-                {monthClaimsDisabled ? "Month disabled" : "Month live"}
+                {monthClaimsDisabled ? "Month paused" : "Month live"}
               </p>
               <p className="text-xs text-[var(--muted)]">
                 {monthClaimsDisabled
@@ -295,16 +295,16 @@ export function CalendarMonthView({
               disabled={togglingMonthClaims}
               aria-label={
                 monthClaimsDisabled
-                  ? "Enable claims for this month"
-                  : "Disable claims for this month"
+                  ? "Resume claims for this month"
+                  : "Pause claims for this month"
               }
               onCheckedChange={(checked) => void toggleMonthClaims(checked)}
             />
           </div>
         ) : monthClaimsDisabled ? (
           <div className="mb-4 flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/50 px-3 py-2.5 text-sm text-[var(--muted)]">
-            <Ban className="h-4 w-4 shrink-0" />
-            This month is not open for claims.
+            <Pause className="h-4 w-4 shrink-0" />
+            Claims are paused this month.
           </div>
         ) : null}
 
@@ -359,9 +359,9 @@ export function CalendarMonthView({
                   <span className="text-sm font-semibold">{format(day, "d")}</span>
                   <span className="flex items-center gap-1">
                     {claimsDisabled ? (
-                      <Ban
+                      <Pause
                         className="h-3.5 w-3.5 text-[var(--muted)]"
-                        aria-label="Claims disabled"
+                        aria-label="Claims paused"
                       />
                     ) : null}
                     {daySlots.length > 0 && (
@@ -392,7 +392,7 @@ export function CalendarMonthView({
                     )}
                   >
                     {claimsDisabled
-                      ? "Disabled"
+                      ? "Paused"
                       : allBlocked
                         ? "Blocked"
                         : dayFull
@@ -402,7 +402,7 @@ export function CalendarMonthView({
                 )}
                 {claimsDisabled && daySlots.length === 0 ? (
                   <p className="mt-2 text-[10px] font-semibold text-[var(--muted)] sm:text-xs">
-                    Disabled
+                    Paused
                   </p>
                 ) : null}
               </button>
