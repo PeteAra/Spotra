@@ -83,6 +83,57 @@ function toSlotWithReservations(
   };
 }
 
+const RESERVATION_PAGE_SIZE = 1000;
+const SLOT_ID_CHUNK_SIZE = 100;
+
+const RESERVATION_SELECT =
+  "*, account:accounts!reservations_account_id_fkey(id, email, display_name, avatar_url, created_at, updated_at)";
+
+/**
+ * Supabase/PostgREST silently caps unbounded selects at 1000 rows.
+ * Sonography Open Lab already has >1000 claimed reservations in a single
+ * month, so we must page (and chunk `.in()` filters) or the UI undercounts.
+ */
+async function fetchClaimedReservationsForSlots(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workspaceId: string,
+  slotIds: string[],
+): Promise<{ ok: true; data: Reservation[] } | { ok: false; error: string }> {
+  if (slotIds.length === 0) {
+    return { ok: true, data: [] };
+  }
+
+  const all: Reservation[] = [];
+
+  for (let i = 0; i < slotIds.length; i += SLOT_ID_CHUNK_SIZE) {
+    const chunk = slotIds.slice(i, i + SLOT_ID_CHUNK_SIZE);
+
+    for (let from = 0; ; from += RESERVATION_PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from("reservations")
+        .select(RESERVATION_SELECT)
+        .eq("workspace_id", workspaceId)
+        .in("slot_id", chunk)
+        .eq("status", "claimed")
+        .order("id", { ascending: true })
+        .range(from, from + RESERVATION_PAGE_SIZE - 1);
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+
+      const rows = (data ?? []) as Reservation[];
+      all.push(...rows);
+
+      if (rows.length < RESERVATION_PAGE_SIZE) {
+        break;
+      }
+    }
+  }
+
+  return { ok: true, data: all };
+}
+
 export async function getSlotsForMonth(input: {
   workspaceId: string;
   monthKey: string;
@@ -121,29 +172,21 @@ export async function getSlotsForMonth(input: {
     return { ok: true, data: [] };
   }
 
-  const { data: reservations, error: resError } = await supabase
-    .from("reservations")
-    .select(
-      "*, account:accounts!reservations_account_id_fkey(id, email, display_name, avatar_url, created_at, updated_at)",
-    )
-    .eq("workspace_id", input.workspaceId)
-    .in("slot_id", slotIds)
-    .eq("status", "claimed");
+  const reservationsResult = await fetchClaimedReservationsForSlots(
+    supabase,
+    input.workspaceId,
+    slotIds,
+  );
 
-  if (resError) {
-    console.error("reservations fetch failed", resError.message);
-    return {
-      ok: true,
-      data: (slots as Slot[]).map((slot) =>
-        toSlotWithReservations(slot, []),
-      ),
-    };
+  if (!reservationsResult.ok) {
+    console.error("reservations fetch failed", reservationsResult.error);
+    return { ok: false, error: reservationsResult.error };
   }
 
   const bySlot = new Map<string, Reservation[]>();
-  for (const row of reservations ?? []) {
+  for (const row of reservationsResult.data) {
     const list = bySlot.get(row.slot_id) ?? [];
-    list.push(row as Reservation);
+    list.push(row);
     bySlot.set(row.slot_id, list);
   }
 

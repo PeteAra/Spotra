@@ -59,6 +59,8 @@ export function SlotClaimToast({
     setLoading(false);
     if (!result.ok) {
       toast.error(result.error);
+      // Stale open counts are common when others claimed first — refresh roster.
+      onClaimed();
       return;
     }
     toast.success("Spot claimed");
