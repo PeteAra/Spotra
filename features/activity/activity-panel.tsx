@@ -243,16 +243,16 @@ export function ActivityPanel({
         from: slotDate ? undefined : fromIso,
         to: slotDate ? undefined : toIso,
         kinds,
-        limit: 500,
+        limit: 2000,
         offset: 0,
       });
       if (!result.ok) throw new Error(result.error);
-      return result.data.items;
+      return result.data;
     },
   });
 
   const items = useMemo(() => {
-    const list = data ?? [];
+    const list = data?.items ?? [];
     const q = slotQuery.trim().toLowerCase();
     if (!q || slotId) return list;
     return list.filter((item) => {
@@ -271,6 +271,8 @@ export function ActivityPanel({
       return hay.includes(q);
     });
   }, [data, slotQuery, slotId]);
+
+  const hasMore = Boolean(data?.hasMore);
 
   const grouped = useMemo(() => {
     const map = new Map<string, ActivityItem[]>();
@@ -482,7 +484,9 @@ export function ActivityPanel({
             <p className="text-xs text-[var(--muted)]">
               {isLoading || isFetching
                 ? "Loading…"
-                : `${items.length} event${items.length === 1 ? "" : "s"}`}
+                : `${items.length} event${items.length === 1 ? "" : "s"}${
+                    hasMore ? " (showing latest 2000)" : ""
+                  }`}
             </p>
             <div className="flex gap-2">
               <Button

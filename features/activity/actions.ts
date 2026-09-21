@@ -13,7 +13,7 @@ import type {
 } from "@/types";
 
 const DEFAULT_LIMIT = 200;
-const MAX_LIMIT = 500;
+const MAX_LIMIT = 2000;
 
 async function requireAdmin(workspaceId: string) {
   const supabase = await createClient();
@@ -240,7 +240,7 @@ export async function getWorkspaceActivity(
       )
       .eq("workspace_id", input.workspaceId)
       .order("occurred_at", { ascending: false })
-      .limit(500);
+      .limit(MAX_LIMIT);
 
     if (input.accountId) {
       eventsQuery = eventsQuery.eq("account_id", input.accountId);
