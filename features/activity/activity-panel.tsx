@@ -3,11 +3,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
-import { Download } from "lucide-react";
+import { ChevronDown, Download } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Sheet,
   SheetContent,
@@ -19,7 +24,15 @@ import { getWorkspaceActivity } from "@/features/activity/actions";
 import { useMembers } from "@/hooks/use-workspace-data";
 import { getClientTimeZoneOffsetMinutes } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils/cn";
-import type { ActivityItem, ActivityKind } from "@/types";
+import type { ActivityItem, ActivityKind, WorkspaceMember } from "@/types";
+
+function memberLabel(member: WorkspaceMember) {
+  return member.account?.display_name?.trim() || member.account_id;
+}
+
+function memberInitials(member: WorkspaceMember) {
+  return memberLabel(member).slice(0, 2).toUpperCase();
+}
 
 const ALL_KINDS: ActivityKind[] = [
   "claimed",
@@ -144,8 +157,22 @@ export function ActivityPanel({
   const [slotDate, setSlotDate] = useState<string | undefined>();
   const [slotId, setSlotId] = useState<string | undefined>();
   const [kinds, setKinds] = useState<ActivityKind[]>([...ALL_KINDS]);
+  const [personOpen, setPersonOpen] = useState(false);
 
   const { data: members = [] } = useMembers(workspaceId, open);
+
+  const sortedMembers = useMemo(() => {
+    return [...members].sort((a, b) =>
+      memberLabel(a).localeCompare(memberLabel(b), undefined, {
+        sensitivity: "base",
+      }),
+    );
+  }, [members]);
+
+  const selectedMember = useMemo(
+    () => sortedMembers.find((m) => m.account_id === accountId) ?? null,
+    [sortedMembers, accountId],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -313,19 +340,95 @@ export function ActivityPanel({
               <Label htmlFor="activity-person" className="text-xs">
                 Person
               </Label>
-              <select
-                id="activity-person"
-                className="flex h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
-                value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
-              >
-                <option value="">Everyone</option>
-                {members.map((m) => (
-                  <option key={m.account_id} value={m.account_id}>
-                    {m.account?.display_name ?? m.account_id}
-                  </option>
-                ))}
-              </select>
+              <Popover modal open={personOpen} onOpenChange={setPersonOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    id="activity-person"
+                    type="button"
+                    className="flex h-10 w-full items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-left text-sm transition hover:border-[var(--accent)]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                  >
+                    {selectedMember ? (
+                      <Avatar className="h-6 w-6">
+                        <AvatarImage
+                          src={
+                            selectedMember.account?.avatar_url ?? undefined
+                          }
+                        />
+                        <AvatarFallback className="text-[10px]">
+                          {memberInitials(selectedMember)}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : (
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[10px] font-medium text-[var(--muted)]">
+                        All
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1 truncate">
+                      {selectedMember
+                        ? memberLabel(selectedMember)
+                        : "Everyone"}
+                    </span>
+                    <ChevronDown
+                      className="h-4 w-4 shrink-0 text-[var(--muted)]"
+                      aria-hidden
+                    />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  side="bottom"
+                  sideOffset={6}
+                  collisionPadding={16}
+                  className="z-[60] w-[var(--radix-popover-trigger-width)] p-1.5"
+                >
+                  <div className="max-h-64 overflow-y-auto overscroll-contain">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAccountId("");
+                        setPersonOpen(false);
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-[var(--surface-muted)]",
+                        !accountId && "bg-[var(--surface-muted)]",
+                      )}
+                    >
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--surface)] text-[10px] font-medium text-[var(--muted)] ring-1 ring-[var(--border)]">
+                        All
+                      </span>
+                      <span>Everyone</span>
+                    </button>
+                    {sortedMembers.map((m) => {
+                      const name = memberLabel(m);
+                      const selected = m.account_id === accountId;
+                      return (
+                        <button
+                          key={m.account_id}
+                          type="button"
+                          onClick={() => {
+                            setAccountId(m.account_id);
+                            setPersonOpen(false);
+                          }}
+                          className={cn(
+                            "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-[var(--surface-muted)]",
+                            selected && "bg-[var(--surface-muted)]",
+                          )}
+                        >
+                          <Avatar className="h-7 w-7">
+                            <AvatarImage
+                              src={m.account?.avatar_url ?? undefined}
+                            />
+                            <AvatarFallback className="text-[10px]">
+                              {memberInitials(m)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="min-w-0 truncate">{name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="space-y-1">
