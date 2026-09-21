@@ -120,7 +120,7 @@ export async function getMemberHistory(input: {
     admin.supabase
       .from("reservations")
       .select(
-        "id, status, claimed_at, cancelled_at, cancellation_reason, slot_id, slot:slots(id, title, starts_at, ends_at)",
+        "id, status, claimed_at, cancelled_at, cancellation_reason, slot_id, slot_title, slot_starts_at, slot_ends_at, slot:slots(id, title, starts_at, ends_at)",
       )
       .eq("workspace_id", input.workspaceId)
       .eq("account_id", input.accountId)
@@ -151,7 +151,10 @@ export async function getMemberHistory(input: {
     claimed_at: string;
     cancelled_at: string | null;
     cancellation_reason: string | null;
-    slot_id: string;
+    slot_id: string | null;
+    slot_title: string | null;
+    slot_starts_at: string | null;
+    slot_ends_at: string | null;
     slot:
       | {
           id: string;
@@ -169,16 +172,19 @@ export async function getMemberHistory(input: {
   };
 
   for (const row of (reservationsResult.data ?? []) as ReservationRow[]) {
-    const slot = Array.isArray(row.slot) ? row.slot[0] : row.slot;
+    const live = Array.isArray(row.slot) ? row.slot[0] : row.slot;
+    const slot_title = live?.title || row.slot_title || undefined;
+    const slot_starts_at = live?.starts_at || row.slot_starts_at || undefined;
+    const slot_ends_at = live?.ends_at || row.slot_ends_at || undefined;
 
     items.push({
       id: `claim-${row.id}`,
       kind: "claimed",
       occurred_at: row.claimed_at,
-      slot_id: row.slot_id,
-      slot_title: slot?.title || undefined,
-      slot_starts_at: slot?.starts_at,
-      slot_ends_at: slot?.ends_at,
+      slot_id: row.slot_id ?? undefined,
+      slot_title,
+      slot_starts_at,
+      slot_ends_at,
     });
 
     if (row.status === "cancelled" && row.cancelled_at) {
@@ -186,10 +192,10 @@ export async function getMemberHistory(input: {
         id: `cancel-${row.id}`,
         kind: "cancelled",
         occurred_at: row.cancelled_at,
-        slot_id: row.slot_id,
-        slot_title: slot?.title || undefined,
-        slot_starts_at: slot?.starts_at,
-        slot_ends_at: slot?.ends_at,
+        slot_id: row.slot_id ?? undefined,
+        slot_title,
+        slot_starts_at,
+        slot_ends_at,
         cancellation_reason: row.cancellation_reason,
       });
     }
@@ -227,6 +233,25 @@ export async function setMemberRole(input: {
 
   if (target.role === input.role) {
     return { ok: true, data: undefined };
+  }
+
+  const { data: workspace } = await admin.supabase
+    .from("workspaces")
+    .select("created_by")
+    .eq("id", input.workspaceId)
+    .maybeSingle();
+
+  // Workspace owner cannot be demoted — only deleting the workspace removes them.
+  if (
+    workspace?.created_by === input.accountId &&
+    target.role === "admin" &&
+    input.role === "participant"
+  ) {
+    return {
+      ok: false,
+      error:
+        "The workspace owner can't be demoted. They can only leave by deleting the workspace.",
+    };
   }
 
   // Don't demote the last admin (including demoting yourself).
@@ -268,6 +293,20 @@ export async function removeMember(input: {
       ok: false,
       error:
         "You can't remove yourself here. Leave from Workspaces, or delete the workspace.",
+    };
+  }
+
+  const { data: workspace } = await admin.supabase
+    .from("workspaces")
+    .select("created_by")
+    .eq("id", input.workspaceId)
+    .maybeSingle();
+
+  if (workspace?.created_by === input.accountId) {
+    return {
+      ok: false,
+      error:
+        "The workspace owner can't be removed. They can only leave by deleting the workspace.",
     };
   }
 

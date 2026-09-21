@@ -256,48 +256,62 @@ export async function listMyWorkspaces(): Promise<
   return { ok: true, data: items };
 }
 
-export async function deleteWorkspace(
-  workspaceId: string,
-): Promise<ActionResult> {
+export async function deleteWorkspace(input: {
+  workspaceId: string;
+  confirmTitle: string;
+}): Promise<ActionResult> {
   const { supabase, user, accountId } = await ensureAccount();
   if (!user || !accountId) {
     return { ok: false, error: "Please sign in." };
   }
 
-  const { data: membership } = await supabase
-    .from("workspace_members")
-    .select("role")
-    .eq("workspace_id", workspaceId)
-    .eq("account_id", accountId)
+  const { data: workspace, error: workspaceError } = await supabase
+    .from("workspaces")
+    .select("id, title, created_by")
+    .eq("id", input.workspaceId)
     .maybeSingle();
 
-  if (!membership || membership.role !== "admin") {
-    return { ok: false, error: "Only admins can delete a workspace." };
+  if (workspaceError) return { ok: false, error: workspaceError.message };
+  if (!workspace) return { ok: false, error: "Workspace not found." };
+
+  if (workspace.created_by !== accountId) {
+    return {
+      ok: false,
+      error: "Only the workspace owner can delete this workspace.",
+    };
   }
 
-  // Delete in order to satisfy slot ← reservation RESTRICT
+  if (workspace.title.trim() !== input.confirmTitle.trim()) {
+    return {
+      ok: false,
+      error: "Workspace name doesn’t match. Deletion cancelled.",
+    };
+  }
+
+  // Step-up auth: require a fresh Google sign-in before destructive delete.
+  const lastSignIn = user.last_sign_in_at
+    ? new Date(user.last_sign_in_at).getTime()
+    : 0;
+  const maxAgeMs = 5 * 60 * 1000;
+  if (!lastSignIn || Date.now() - lastSignIn > maxAgeMs) {
+    return {
+      ok: false,
+      error: "Please sign in with Google again to delete this workspace.",
+    };
+  }
+
+  // Delete reservations first (slot FK is RESTRICT), then the workspace.
+  // Members/slots/etc. cascade from the workspace row.
   const { error: resError } = await supabase
     .from("reservations")
     .delete()
-    .eq("workspace_id", workspaceId);
+    .eq("workspace_id", input.workspaceId);
   if (resError) return { ok: false, error: resError.message };
-
-  const { error: slotsError } = await supabase
-    .from("slots")
-    .delete()
-    .eq("workspace_id", workspaceId);
-  if (slotsError) return { ok: false, error: slotsError.message };
-
-  const { error: membersError } = await supabase
-    .from("workspace_members")
-    .delete()
-    .eq("workspace_id", workspaceId);
-  if (membersError) return { ok: false, error: membersError.message };
 
   const { error: wsError } = await supabase
     .from("workspaces")
     .delete()
-    .eq("id", workspaceId);
+    .eq("id", input.workspaceId);
   if (wsError) return { ok: false, error: wsError.message };
 
   return { ok: true, data: undefined };
@@ -336,6 +350,12 @@ function mapRpcError(message: string): string {
   }
   if (message.includes("LAST_ADMIN")) {
     return "You're the only admin. Delete the workspace instead, or add another admin first.";
+  }
+  if (message.includes("CREATOR_MUST_DELETE_WORKSPACE")) {
+    return "As the workspace owner, delete the workspace instead of leaving.";
+  }
+  if (message.includes("CREATOR_PROTECTED")) {
+    return "The workspace owner can't be removed or demoted.";
   }
   return message;
 }

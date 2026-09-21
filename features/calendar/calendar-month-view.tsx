@@ -22,6 +22,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import {
+  ActivityPanel,
+  type ActivityOpenState,
+} from "@/features/activity/activity-panel";
 import { setClaimsEnabled } from "@/features/calendar/closures-actions";
 import { DayDetailPanel } from "@/features/calendar/day-detail-panel";
 import { MySpotsPanel } from "@/features/calendar/my-spots-panel";
@@ -87,6 +91,9 @@ export function CalendarMonthView({
   const [duplicatePromptOpen, setDuplicatePromptOpen] = useState(false);
   const [mySpotsOpen, setMySpotsOpen] = useState(false);
   const [togglingMonthClaims, setTogglingMonthClaims] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityInitial, setActivityInitial] =
+    useState<ActivityOpenState | null>(null);
 
   const detailRef = useRef<HTMLDivElement>(null);
   const mySpotsRef = useRef<HTMLDivElement>(null);
@@ -463,9 +470,26 @@ export function CalendarMonthView({
             }}
             onSlotsChanged={invalidate}
             onClosuresChanged={invalidateClosures}
+            onOpenActivity={
+              role === "admin"
+                ? (state) => {
+                    setActivityInitial(state);
+                    setActivityOpen(true);
+                  }
+                : undefined
+            }
           />
         </div>
       </div>
+
+      {role === "admin" ? (
+        <ActivityPanel
+          open={activityOpen}
+          onOpenChange={setActivityOpen}
+          workspaceId={workspaceId}
+          initial={activityInitial}
+        />
+      ) : null}
 
       {selectedDay && (
         <SlotFormDialog

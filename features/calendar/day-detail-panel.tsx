@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { Pause, Plus, Trash2 } from "lucide-react";
+import { Pause, Plus, History, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import type { ActivityOpenState } from "@/features/activity/activity-panel";
 import { setClaimsEnabled } from "@/features/calendar/closures-actions";
 import { SlotBlock } from "@/features/calendar/slot-block";
 import { DuplicateDayMenu } from "@/features/slots/duplicate-day-menu";
@@ -68,6 +69,7 @@ export function DayDetailPanel({
   onEditSlot,
   onSlotsChanged,
   onClosuresChanged,
+  onOpenActivity,
 }: {
   day: Date | null;
   slots: SlotWithReservations[];
@@ -82,6 +84,7 @@ export function DayDetailPanel({
   onEditSlot: (slot: SlotWithReservations) => void;
   onSlotsChanged: () => void | Promise<void>;
   onClosuresChanged?: () => void | Promise<void>;
+  onOpenActivity?: (state: ActivityOpenState) => void;
 }) {
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -146,24 +149,40 @@ export function DayDetailPanel({
             {dayLabel}
           </h3>
         </div>
-        {role === "admin" && slots.length > 0 && (
-          <div className="flex flex-wrap justify-end gap-2">
-            <DuplicateDayMenu
-              workspaceId={workspaceId}
-              sourceDate={dateKey}
-              weekdayLabel={format(day, "EEEE")}
-              onDone={onSlotsChanged}
-            />
+        <div className="flex flex-wrap justify-end gap-2">
+          {role === "admin" && onOpenActivity ? (
             <Button
               size="sm"
-              variant="outline"
-              onClick={() => setClearOpen(true)}
+              variant="secondary"
+              onClick={() =>
+                onOpenActivity({
+                  slotDate: dateKey,
+                })
+              }
             >
-              <Trash2 className="h-3.5 w-3.5" />
-              Clear day
+              <History className="h-3.5 w-3.5" />
+              Activity
             </Button>
-          </div>
-        )}
+          ) : null}
+          {role === "admin" && slots.length > 0 && (
+            <>
+              <DuplicateDayMenu
+                workspaceId={workspaceId}
+                sourceDate={dateKey}
+                weekdayLabel={format(day, "EEEE")}
+                onDone={onSlotsChanged}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setClearOpen(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Clear day
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {role === "admin" ? (
@@ -258,6 +277,17 @@ export function DayDetailPanel({
               }
               onEdit={() => onEditSlot(slot)}
               onChanged={onSlotsChanged}
+              onOpenActivity={
+                onOpenActivity
+                  ? () =>
+                      onOpenActivity({
+                        slotId: slot.id,
+                        slotLabel:
+                          slot.title?.trim() ||
+                          format(new Date(slot.starts_at), "h:mm a"),
+                      })
+                  : undefined
+              }
             />
           ))
         )}

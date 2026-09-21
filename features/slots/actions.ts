@@ -185,6 +185,7 @@ export async function getSlotsForMonth(input: {
 
   const bySlot = new Map<string, Reservation[]>();
   for (const row of reservationsResult.data) {
+    if (!row.slot_id) continue;
     const list = bySlot.get(row.slot_id) ?? [];
     list.push(row);
     bySlot.set(row.slot_id, list);
@@ -949,15 +950,7 @@ export async function deleteSlot(input: {
   const skipped = targets.length - deletable.length;
 
   for (const target of deletable) {
-    // Cancelled claim rows keep a FK to the slot (ON DELETE RESTRICT), so clear
-    // history for this slot before deleting the container.
-    const { error: historyError } = await admin.supabase
-      .from("reservations")
-      .delete()
-      .eq("slot_id", target.id);
-
-    if (historyError) return { ok: false, error: historyError.message };
-
+    // History rows are detached (slot_id null + snapshots kept) by a DB trigger.
     const { error } = await admin.supabase
       .from("slots")
       .delete()
@@ -1264,16 +1257,6 @@ export async function deleteSlotsInMonth(input: {
       continue;
     }
 
-    const { error: historyError } = await admin.supabase
-      .from("reservations")
-      .delete()
-      .eq("slot_id", slot.id);
-
-    if (historyError) {
-      skipped += 1;
-      continue;
-    }
-
     const { error: delError } = await admin.supabase
       .from("slots")
       .delete()
@@ -1319,16 +1302,6 @@ export async function deleteSlotsInDay(input: {
       .eq("status", "claimed");
 
     if (countError || (activeClaims ?? 0) > 0) {
-      skipped += 1;
-      continue;
-    }
-
-    const { error: historyError } = await admin.supabase
-      .from("reservations")
-      .delete()
-      .eq("slot_id", slot.id);
-
-    if (historyError) {
       skipped += 1;
       continue;
     }

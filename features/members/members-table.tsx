@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -11,12 +10,12 @@ import type { Account, WorkspaceMember, WorkspaceRole } from "@/types";
 
 export function MembersTable({
   workspaceId,
-  workspaceSlug,
   currentAccountId,
+  createdByAccountId,
 }: {
   workspaceId: string;
-  workspaceSlug: string;
   currentAccountId: string;
+  createdByAccountId: string;
 }) {
   const { data: members = [], isLoading, refetch } = useMembers(workspaceId);
 
@@ -25,6 +24,10 @@ export function MembersTable({
   }
 
   const adminCount = members.filter((m) => m.role === "admin").length;
+
+  function isOwner(member: WorkspaceMember) {
+    return member.account_id === createdByAccountId;
+  }
 
   async function onRemove(member: WorkspaceMember & { account: Account }) {
     const result = await removeMember({
@@ -59,7 +62,7 @@ export function MembersTable({
   }
 
   function canRemove(member: WorkspaceMember) {
-    // Self-removal is via Leave on /workspaces or Delete workspace.
+    if (isOwner(member)) return false;
     return member.account_id !== currentAccountId;
   }
 
@@ -68,7 +71,7 @@ export function MembersTable({
   }
 
   function canDemote(member: WorkspaceMember) {
-    // Allow demoting other admins, and yourself only when another admin exists.
+    if (isOwner(member)) return false;
     if (member.role !== "admin") return false;
     if (member.account_id === currentAccountId) return adminCount > 1;
     return true;
@@ -82,15 +85,17 @@ export function MembersTable({
     stretch?: boolean;
   }) {
     const flex = stretch ? "flex-1" : undefined;
+    const hasActions =
+      canPromote(member) || canDemote(member) || canRemove(member);
+
+    if (!hasActions) {
+      return (
+        <span className="text-xs text-[var(--muted)]">No actions</span>
+      );
+    }
+
     return (
       <>
-        <Button size="sm" variant="secondary" asChild className={flex}>
-          <Link
-            href={`/workspace/${workspaceSlug}/users/${member.account_id}/history`}
-          >
-            History
-          </Link>
-        </Button>
         {canPromote(member) && (
           <Button
             size="sm"
@@ -127,7 +132,6 @@ export function MembersTable({
 
   return (
     <>
-      {/* Mobile: stacked cards so actions stay visible */}
       <ul className="space-y-3 md:hidden">
         {members.map((member) => (
           <li
@@ -153,6 +157,7 @@ export function MembersTable({
                 </p>
                 <p className="mt-1 text-xs text-[var(--muted)]">
                   <span className="capitalize">{member.role}</span>
+                  {isOwner(member) ? " · Owner" : ""}
                   {" · "}Joined {format(new Date(member.joined_at), "MMM d, yyyy")}
                 </p>
               </div>
@@ -164,7 +169,6 @@ export function MembersTable({
         ))}
       </ul>
 
-      {/* Desktop: table */}
       <div className="hidden overflow-hidden rounded-2xl border border-[var(--border)] md:block">
         <table className="w-full text-left text-sm">
           <thead className="bg-[var(--surface-muted)] text-[var(--muted)]">
@@ -208,7 +212,14 @@ export function MembersTable({
                     </span>
                   </div>
                 </td>
-                <td className="px-4 py-3 capitalize">{member.role}</td>
+                <td className="px-4 py-3 capitalize">
+                  {member.role}
+                  {isOwner(member) ? (
+                    <span className="ml-1.5 text-xs font-normal normal-case text-[var(--muted)]">
+                      · Owner
+                    </span>
+                  ) : null}
+                </td>
                 <td className="px-4 py-3 text-[var(--muted)]">
                   {format(new Date(member.joined_at), "MMM d, yyyy")}
                 </td>

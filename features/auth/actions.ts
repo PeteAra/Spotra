@@ -44,6 +44,29 @@ export async function signInWithGoogle(returnTo = "/") {
   }
 }
 
+/** Force Google to ask for credentials again (step-up auth). */
+export async function reauthenticateWithGoogle(returnTo: string) {
+  const supabase = createClient();
+  const origin = appOrigin();
+
+  setAuthReturnCookie(returnTo);
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(returnTo)}`,
+      queryParams: {
+        prompt: "login",
+        max_age: "0",
+      },
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function signOut() {
   const supabase = createClient();
   await supabase.auth.signOut({ scope: "global" });

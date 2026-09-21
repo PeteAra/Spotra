@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MessageSquare, Pencil, Trash2 } from "lucide-react";
+import { History, MessageSquare, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +36,7 @@ export function SlotBlock({
   claimsUnavailableReason,
   onEdit,
   onChanged,
+  onOpenActivity,
 }: {
   slot: SlotWithReservations;
   accountId: string;
@@ -44,6 +45,7 @@ export function SlotBlock({
   claimsUnavailableReason?: "paused" | "past";
   onEdit: () => void;
   onChanged: () => void;
+  onOpenActivity?: () => void;
 }) {
   const [claimOpen, setClaimOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -244,6 +246,17 @@ export function SlotBlock({
           )}
           {role === "admin" && (
             <>
+              {onOpenActivity ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  title="Activity"
+                  onClick={onOpenActivity}
+                >
+                  <History className="h-3.5 w-3.5" />
+                </Button>
+              ) : null}
               <Button
                 variant="ghost"
                 size="icon"

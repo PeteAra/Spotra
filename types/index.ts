@@ -90,7 +90,7 @@ export type Slot = {
 export type Reservation = {
   id: string;
   workspace_id: string;
-  slot_id: string;
+  slot_id: string | null;
   account_id: string;
   status: ReservationStatus;
   claimed_at: string;
@@ -98,7 +98,43 @@ export type Reservation = {
   cancelled_at: string | null;
   cancellation_reason: string | null;
   cancelled_by: string | null;
+  slot_title?: string | null;
+  slot_starts_at?: string | null;
+  slot_ends_at?: string | null;
   account?: Account;
+};
+
+export type ActivityKind = MemberHistoryKind;
+
+export type ActivityItem = {
+  id: string;
+  kind: ActivityKind;
+  occurred_at: string;
+  account_id?: string;
+  account_display_name?: string;
+  account_email?: string;
+  account_avatar_url?: string | null;
+  role?: WorkspaceRole;
+  slot_id?: string | null;
+  slot_title?: string;
+  slot_starts_at?: string;
+  slot_ends_at?: string;
+  claim_comment?: string | null;
+  cancellation_reason?: string | null;
+};
+
+export type ActivityFilters = {
+  workspaceId: string;
+  from?: string;
+  to?: string;
+  accountId?: string;
+  slotId?: string;
+  /** Calendar day (yyyy-MM-dd) — spots scheduled that day */
+  slotDate?: string;
+  timeZoneOffsetMinutes?: number;
+  kinds?: ActivityKind[];
+  limit?: number;
+  offset?: number;
 };
 
 export type SlotWithReservations = Slot & {

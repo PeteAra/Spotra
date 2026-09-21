@@ -42,7 +42,11 @@ export function WorkspacePageClient({
 
   return (
     <div>
-      <WorkspaceHeader workspace={data.workspace} role={data.role} />
+      <WorkspaceHeader
+        workspace={data.workspace}
+        role={data.role}
+        accountId={data.accountId}
+      />
       <CalendarMonthView
         workspaceId={data.workspace.id}
         role={data.role}

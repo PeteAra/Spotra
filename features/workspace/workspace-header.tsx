@@ -3,36 +3,33 @@
 import { useState } from "react";
 import { Check, Copy, LayoutGrid, Link2, Trash2, Users } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { deleteWorkspace } from "@/features/workspace/actions";
+import { DeleteWorkspaceDialog } from "@/features/workspace/delete-workspace-dialog";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 import type { Workspace, WorkspaceRole } from "@/types";
 
 export function WorkspaceHeader({
   workspace,
   role,
+  accountId,
 }: {
   workspace: Workspace;
   role: WorkspaceRole;
+  accountId: string;
 }) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const [shareOpen, setShareOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const isOwner = workspace.created_by === accountId;
   const shareUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}/workspace/${workspace.slug}`
@@ -55,7 +52,6 @@ export function WorkspaceHeader({
           return;
         }
       } catch (error) {
-        // User dismissed the sheet — don't open the fallback dialog.
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
@@ -90,10 +86,12 @@ export function WorkspaceHeader({
                 Users
               </Link>
             </Button>
-            <Button variant="outline" onClick={() => setDeleteOpen(true)}>
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </Button>
+            {isOwner ? (
+              <Button variant="outline" onClick={() => setDeleteOpen(true)}>
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </Button>
+            ) : null}
           </>
         )}
         <Button onClick={handleShare}>
@@ -129,43 +127,12 @@ export function WorkspaceHeader({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete this workspace?</DialogTitle>
-            <DialogDescription>
-              This permanently deletes {workspace.title}, including spots and
-              claim history.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={deleting}
-              onClick={async () => {
-                setDeleting(true);
-                const result = await deleteWorkspace(workspace.id);
-                if (!result.ok) {
-                  setDeleting(false);
-                  toast.error(result.error);
-                  return;
-                }
-                await queryClient.invalidateQueries({
-                  queryKey: ["my-workspaces"],
-                });
-                toast.success("Workspace deleted");
-                router.push("/workspaces");
-                router.refresh();
-              }}
-            >
-              {deleting ? "Deleting…" : "Delete workspace"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteWorkspaceDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        workspaceId={workspace.id}
+        workspaceTitle={workspace.title}
+      />
     </header>
   );
 }

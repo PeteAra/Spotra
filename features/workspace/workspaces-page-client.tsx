@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -8,15 +8,12 @@ import { LayoutGrid, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { CreateWorkspaceModal } from "@/features/workspace/create-workspace-modal";
+import {
+  clearPendingWorkspaceDelete,
+  DeleteWorkspaceDialog,
+  readPendingWorkspaceDelete,
+} from "@/features/workspace/delete-workspace-dialog";
 import {
   deleteWorkspace,
   leaveWorkspace,
@@ -32,6 +29,7 @@ export function WorkspacesPageClient({ account }: { account: Account }) {
     id: string;
     title: string;
   } | null>(null);
+  const completingDelete = useRef(false);
 
   const { data, isLoading, error, isFetching } = useQuery({
     queryKey: ["my-workspaces"],
@@ -49,6 +47,45 @@ export function WorkspacesPageClient({ account }: { account: Account }) {
     await queryClient.invalidateQueries({ queryKey: ["my-workspaces"] });
     await queryClient.refetchQueries({ queryKey: ["my-workspaces"] });
   }
+
+  useEffect(() => {
+    if (completingDelete.current) return;
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const deleteId = params.get("deleteWorkspace");
+    if (!deleteId) return;
+
+    const pending = readPendingWorkspaceDelete();
+    // Clean the URL whether we succeed or bail.
+    const cleanUrl = `${window.location.pathname}`;
+    window.history.replaceState({}, "", cleanUrl);
+
+    if (!pending || pending.id !== deleteId) {
+      clearPendingWorkspaceDelete();
+      toast.error("Deletion wasn’t confirmed. Nothing was deleted.");
+      return;
+    }
+
+    completingDelete.current = true;
+    const toastId = toast.loading(`Deleting “${pending.title}”…`);
+
+    void (async () => {
+      const result = await deleteWorkspace({
+        workspaceId: pending.id,
+        confirmTitle: pending.confirmTitle,
+      });
+      clearPendingWorkspaceDelete();
+      if (!result.ok) {
+        toast.error(result.error, { id: toastId });
+        completingDelete.current = false;
+        return;
+      }
+      toast.success("Workspace deleted", { id: toastId });
+      await refresh();
+      completingDelete.current = false;
+    })();
+  }, []);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
@@ -138,6 +175,7 @@ export function WorkspacesPageClient({ account }: { account: Account }) {
               </Link>
               <p className="mt-1 text-sm text-[var(--muted)]">
                 <span className="capitalize">{item.role}</span>
+                {item.workspace.created_by === account.id ? " · Owner" : ""}
                 {" · "}
                 Joined {format(new Date(item.joined_at), "MMM d, yyyy")}
               </p>
@@ -146,7 +184,7 @@ export function WorkspacesPageClient({ account }: { account: Account }) {
               <Button asChild>
                 <Link href={`/workspace/${item.workspace.slug}`}>Open</Link>
               </Button>
-              {item.role === "admin" ? (
+              {item.workspace.created_by === account.id ? (
                 <Button
                   variant="outline"
                   onClick={() =>
@@ -186,42 +224,14 @@ export function WorkspacesPageClient({ account }: { account: Account }) {
 
       <CreateWorkspaceModal open={createOpen} onOpenChange={setCreateOpen} />
 
-      <Dialog
-        open={Boolean(pendingDelete)}
-        onOpenChange={(open) => !open && setPendingDelete(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete workspace?</DialogTitle>
-            <DialogDescription>
-              This permanently deletes{" "}
-              <strong>{pendingDelete?.title}</strong>, including all spots and
-              claim history. This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setPendingDelete(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={async () => {
-                if (!pendingDelete) return;
-                const result = await deleteWorkspace(pendingDelete.id);
-                if (!result.ok) {
-                  toast.error(result.error);
-                  return;
-                }
-                toast.success("Workspace deleted");
-                setPendingDelete(null);
-                await refresh();
-              }}
-            >
-              Delete workspace
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {pendingDelete ? (
+        <DeleteWorkspaceDialog
+          open={Boolean(pendingDelete)}
+          onOpenChange={(open) => !open && setPendingDelete(null)}
+          workspaceId={pendingDelete.id}
+          workspaceTitle={pendingDelete.title}
+        />
+      ) : null}
     </div>
   );
 }

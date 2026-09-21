@@ -1,92 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Download } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { useMemberHistory } from "@/hooks/use-workspace-data";
-import { cn } from "@/lib/utils/cn";
-import type { Account, MemberHistoryItem, WorkspaceMember } from "@/types";
-
-function kindLabel(kind: MemberHistoryItem["kind"]) {
-  switch (kind) {
-    case "joined":
-      return "Joined workspace";
-    case "left":
-      return "Left workspace";
-    case "removed":
-      return "Removed from workspace";
-    case "claimed":
-      return "Claimed a spot";
-    case "cancelled":
-      return "Cancelled a spot";
-  }
-}
-
-function formatSlotWindow(item: MemberHistoryItem) {
-  if (!item.slot_starts_at) return null;
-  const start = new Date(item.slot_starts_at);
-  const end = item.slot_ends_at ? new Date(item.slot_ends_at) : null;
-  const day = format(start, "MMM d, yyyy");
-  const times = end
-    ? `${format(start, "h:mm a")} – ${format(end, "h:mm a")}`
-    : format(start, "h:mm a");
-  const title = item.slot_title?.trim() || "Untitled spot";
-  return `${title} · ${day} · ${times}`;
-}
-
-function toCsv(items: MemberHistoryItem[]) {
-  const header = [
-    "timestamp",
-    "event",
-    "role",
-    "spot_title",
-    "spot_starts_at",
-    "spot_ends_at",
-    "cancellation_reason",
-  ];
-
-  const escape = (value: string) => {
-    if (/[",\n]/.test(value)) {
-      return `"${value.replaceAll('"', '""')}"`;
-    }
-    return value;
-  };
-
-  const rows = items.map((item) =>
-    [
-      item.occurred_at,
-      kindLabel(item.kind),
-      item.role ?? "",
-      item.slot_title ?? "",
-      item.slot_starts_at ?? "",
-      item.slot_ends_at ?? "",
-      item.cancellation_reason ?? "",
-    ]
-      .map((cell) => escape(String(cell)))
-      .join(","),
-  );
-
-  return [header.join(","), ...rows].join("\n");
-}
-
-function downloadCsv(account: Account, items: MemberHistoryItem[]) {
-  const stamp = format(new Date(), "yyyy-MM-dd");
-  const safeName = account.display_name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-  const blob = new Blob([toCsv(items)], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `spotra-${safeName || "member"}-history-${stamp}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
+import { ActivityPanel } from "@/features/activity/activity-panel";
+import type { Account, WorkspaceMember } from "@/types";
 
 export function MemberHistoryPageClient({
   workspaceId,
@@ -101,10 +22,12 @@ export function MemberHistoryPageClient({
   account: Account;
   member: WorkspaceMember | null;
 }) {
-  const { data: history = [], isLoading, error } = useMemberHistory(
-    workspaceId,
-    account.id,
-  );
+  const router = useRouter();
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    setOpen(true);
+  }, [account.id]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
@@ -117,20 +40,9 @@ export function MemberHistoryPageClient({
             Member history
           </h1>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={history.length === 0}
-            onClick={() => downloadCsv(account, history)}
-          >
-            <Download className="h-3.5 w-3.5" />
-            Download CSV
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/workspace/${workspaceSlug}/users`}>Back to users</Link>
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" asChild>
+          <Link href={`/workspace/${workspaceSlug}/users`}>Back to users</Link>
+        </Button>
       </div>
 
       <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
@@ -160,74 +72,32 @@ export function MemberHistoryPageClient({
                 "No longer a member of this workspace"
               )}
             </p>
+            <Button
+              className="mt-3"
+              size="sm"
+              variant="secondary"
+              onClick={() => setOpen(true)}
+            >
+              Open activity
+            </Button>
           </div>
         </div>
       </section>
 
-      <section className="mt-6">
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-[var(--muted)]">
-          Timeline
-        </h2>
-
-        {isLoading && (
-          <p className="text-sm text-[var(--muted)]">Loading history…</p>
-        )}
-        {error && (
-          <p className="text-sm text-[var(--danger)]">
-            Could not load history:{" "}
-            {error instanceof Error ? error.message : "Unknown error"}
-          </p>
-        )}
-        {!isLoading && !error && history.length === 0 && (
-          <p className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)]">
-            No membership or spot activity yet.
-          </p>
-        )}
-
-        <ol className="space-y-3">
-          {history.map((item) => {
-            const slotLine = formatSlotWindow(item);
-            return (
-              <li
-                key={item.id}
-                className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <p className="font-medium">{kindLabel(item.kind)}</p>
-                  <time
-                    dateTime={item.occurred_at}
-                    className="text-xs text-[var(--muted)]"
-                  >
-                    {format(new Date(item.occurred_at), "PPpp")}
-                  </time>
-                </div>
-                {item.role && (
-                  <p className="mt-1 text-sm capitalize text-[var(--muted)]">
-                    Role: {item.role}
-                  </p>
-                )}
-                {slotLine && (
-                  <p className="mt-1 text-sm text-[var(--muted)]">{slotLine}</p>
-                )}
-                {item.kind === "cancelled" && item.cancellation_reason && (
-                  <p
-                    className={cn(
-                      "mt-3 rounded-xl bg-[var(--surface-muted)] p-3 text-sm",
-                    )}
-                  >
-                    <span className="block text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-                      Cancellation reason
-                    </span>
-                    <span className="mt-1 block">
-                      {item.cancellation_reason}
-                    </span>
-                  </p>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-      </section>
+      <ActivityPanel
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) {
+            router.push(`/workspace/${workspaceSlug}/users`);
+          }
+        }}
+        workspaceId={workspaceId}
+        initial={{
+          accountId: account.id,
+          personLabel: account.display_name || account.email,
+        }}
+      />
     </div>
   );
 }
